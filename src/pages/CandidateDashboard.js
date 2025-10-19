@@ -1,0 +1,99 @@
+// pages/CandidateDashboard.js
+import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { applicationAPI } from '../utils/api';
+
+const CandidateDashboard = ({ user }) => {
+  const [applications, setApplications] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchApplications();
+  }, []);
+
+  const fetchApplications = async () => {
+    try {
+      const response = await applicationAPI.getMyApplications();
+      setApplications(response.data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      pending: 'bg-yellow-100 text-yellow-800',
+      reviewed: 'bg-blue-100 text-blue-800',
+      shortlisted: 'bg-green-100 text-green-800',
+      rejected: 'bg-red-100 text-red-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Welcome, {user.name}!</h1>
+        <p className="text-gray-600">Manage your job applications</p>
+      </div>
+
+      <div className="mb-6">
+        <Link
+          to="/"
+          className="inline-block bg-blue-600 text-white px-6 py-2 rounded hover:bg-blue-700"
+        >
+          Browse Jobs
+        </Link>
+      </div>
+
+      <div className="bg-white rounded-lg shadow-md p-6">
+        <h2 className="text-2xl font-bold mb-4">My Applications</h2>
+
+        {loading ? (
+          <p>Loading applications...</p>
+        ) : applications.length === 0 ? (
+          <div className="text-center py-8 text-gray-500">
+            <p className="mb-4">You haven't applied to any jobs yet.</p>
+            <Link to="/" className="text-blue-600 hover:underline">
+              Start browsing jobs
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {applications.map((app) => (
+              <div key={app._id} className="border rounded-lg p-4 hover:shadow-md transition">
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 className="text-lg font-semibold">{app.job.title}</h3>
+                    <p className="text-gray-600">{app.job.company}</p>
+                    <p className="text-sm text-gray-500">{app.job.location}</p>
+                  </div>
+                  <span className={`px-3 py-1 rounded text-sm font-medium ${getStatusColor(app.status)}`}>
+                    {app.status.charAt(0).toUpperCase() + app.status.slice(1)}
+                  </span>
+                </div>
+
+                <div className="text-sm text-gray-500 mb-3">
+                  Applied on: {new Date(app.appliedAt).toLocaleDateString()}
+                </div>
+
+                <div className="flex gap-2">
+                  <Link
+                    to={`/jobs/${app.job._id}`}
+                    className="text-blue-600 hover:underline text-sm"
+                  >
+                    View Job
+                  </Link>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default CandidateDashboard;
