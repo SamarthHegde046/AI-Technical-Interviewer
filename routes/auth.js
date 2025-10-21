@@ -6,6 +6,7 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
+
 // Email transporter setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -211,7 +212,7 @@ router.post('/login', async (req, res) => {
 });
 
 // Get user profile
-router.get('/profile',auth,async (req, res) => {
+router.get('/profile', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password -otp -otpExpiry');
     if (!user) {
@@ -225,7 +226,7 @@ router.get('/profile',auth,async (req, res) => {
 });
 
 // Update user profile
-router.put('/profile',auth,async (req, res) => {
+router.put('/profile', auth, async (req, res) => {
   try {
     const { name, profile } = req.body;
     
