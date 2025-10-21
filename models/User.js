@@ -9,6 +9,27 @@ const userSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   otp: { type: String },
   otpExpiry: { type: Date },
+
+  profile: {
+    phone: { type: String },
+    location: { type: String },
+    bio: { type: String },
+    techStack: [{ type: String }],
+    experience: { type: String },
+    education: { type: String },
+    resume: { type: String },
+    portfolio: { type: String },
+    linkedin: { type: String },
+    github: { type: String },
+    projects: [{
+      name: { type: String },
+      description: { type: String },
+      githubLink: { type: String },
+      techUsed: [{ type: String }],
+      liveLink: { type: String }
+    }],
+    skills: [{ type: String }]
+  },
   createdAt: { type: Date, default: Date.now }
 });
 

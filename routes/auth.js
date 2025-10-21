@@ -5,7 +5,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer');
 const User = require('../models/User');
-
+const { auth } = require('../middleware/auth');
 // Email transporter setup
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -29,7 +29,7 @@ const sendOTPEmail = async (email, otp) => {
     html: `
       <h2>Email Verification</h2>
       <p>Your OTP for email verification is: <strong>${otp}</strong></p>
-      <p>This OTP will expire in 10 minutes.Lawde bega enter mado</p>
+      <p>This OTP will expire in 10 minutes.</p>
     `
   };
   
@@ -203,6 +203,46 @@ router.post('/login', async (req, res) => {
         email: user.email,
         role: user.role
       }
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Get user profile
+router.get('/profile',auth,async (req, res) => {
+  try {
+    const user = await User.findById(req.user.userId).select('-password -otp -otpExpiry');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Update user profile
+router.put('/profile',auth,async (req, res) => {
+  try {
+    const { name, profile } = req.body;
+    
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    if (name) user.name = name;
+    if (profile) user.profile = { ...user.profile, ...profile };
+
+    await user.save();
+
+    const updatedUser = await User.findById(req.user.userId).select('-password -otp -otpExpiry');
+    res.json({
+      message: 'Profile updated successfully',
+      user: updatedUser
     });
   } catch (err) {
     console.error(err);
