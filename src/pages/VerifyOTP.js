@@ -11,6 +11,7 @@ const VerifyOTP = ({ onLogin }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const userId = location.state?.userId;
+  const email = location.state?.email;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -29,7 +30,7 @@ const VerifyOTP = ({ onLogin }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }
 
   const handleResendOTP = async () => {
     setError('');
