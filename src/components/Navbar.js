@@ -18,6 +18,14 @@ const Navbar = ({ user, onLogout }) => {
               >
                 Dashboard
               </Link>
+              {user.role === 'candidate' && (
+                <Link 
+                  to="/candidate/profile" 
+                  className="px-4 py-2 bg-blue-700 rounded hover:bg-blue-800"
+                >
+                  Profile
+                </Link>
+              )}
               <button 
                 onClick={onLogout}
                 className="px-4 py-2 bg-red-500 rounded hover:bg-red-600"

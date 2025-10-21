@@ -7,6 +7,7 @@ import Register from './pages/Register';
 import VerifyOTP from './pages/VerifyOTP';
 import CandidateDashboard from './pages/CandidateDashboard';
 import RecruiterDashboard from './pages/RecruiterDashboard';
+import CandidateProfile from './pages/CandidateProfile';
 import JobList from './pages/JobList';
 import JobDetails from './pages/JobDetails';
 import ApplyJob from './pages/ApplyJob';
@@ -65,6 +66,10 @@ function App() {
           
           <Route path="/candidate/dashboard" element={
             user && user.role === 'candidate' ? <CandidateDashboard user={user} /> : <Navigate to="/login" />
+          } />
+          
+          <Route path="/candidate/profile" element={
+            user && user.role === 'candidate' ? <CandidateProfile user={user} setUser={setUser} /> : <Navigate to="/login" />
           } />
           
           <Route path="/recruiter/dashboard" element={

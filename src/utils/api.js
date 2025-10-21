@@ -20,6 +20,8 @@ export const authAPI = {
   verifyOTP: (data) => api.post('/auth/verify-otp', data),
   resendOTP: (data) => api.post('/auth/resend-otp', data),
   login: (data) => api.post('/auth/login', data),
+  getProfile: () => api.get('/auth/profile'),
+  updateProfile: (data) => api.put('/auth/profile', data),
 };
 
 export const jobAPI = {

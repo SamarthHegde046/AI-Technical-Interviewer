@@ -1,14 +1,17 @@
 // pages/CandidateDashboard.js
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { applicationAPI } from '../utils/api';
+import { applicationAPI, authAPI } from '../utils/api';
 
 const CandidateDashboard = ({ user }) => {
   const [applications, setApplications] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [profileCompletion, setProfileCompletion] = useState(0);
+  const [profileData, setProfileData] = useState(null);
 
   useEffect(() => {
     fetchApplications();
+    fetchProfile();
   }, []);
 
   const fetchApplications = async () => {
@@ -19,6 +22,32 @@ const CandidateDashboard = ({ user }) => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchProfile = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      const profile = response.data.profile || {};
+      setProfileData(profile);
+      
+      // Calculate profile completion
+      const fields = [
+        profile.phone,
+        profile.location,
+        profile.bio,
+        profile.techStack?.length > 0,
+        profile.experience,
+        profile.education,
+        profile.projects?.length > 0,
+        profile.skills?.length > 0
+      ];
+      
+      const completed = fields.filter(field => field).length;
+      const percentage = Math.round((completed / fields.length) * 100);
+      setProfileCompletion(percentage);
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -37,6 +66,29 @@ const CandidateDashboard = ({ user }) => {
       <div className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Welcome, {user.name}!</h1>
         <p className="text-gray-600">Manage your job applications</p>
+      </div>
+
+      {/* Profile Completion Card */}
+      <div className="bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg shadow-lg p-6 mb-6 text-white">
+        <div className="flex justify-between items-center mb-3">
+          <div>
+            <h3 className="text-xl font-bold">Profile Completion</h3>
+            <p className="text-blue-100 text-sm">Complete your profile to improve job application success</p>
+          </div>
+          <div className="text-3xl font-bold">{profileCompletion}%</div>
+        </div>
+        <div className="w-full bg-blue-300 rounded-full h-3 mb-3">
+          <div 
+            className="bg-white h-3 rounded-full transition-all duration-500" 
+            style={{ width: `${profileCompletion}%` }}
+          ></div>
+        </div>
+        <Link 
+          to="/candidate/profile"
+          className="inline-block bg-white text-blue-600 px-4 py-2 rounded font-semibold hover:bg-blue-50 transition"
+        >
+          {profileCompletion === 100 ? 'View Profile' : 'Complete Profile'}
+        </Link>
       </div>
 
       <div className="mb-6">

@@ -1,6 +1,6 @@
 // pages/RecruiterDashboard.js
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { jobAPI, applicationAPI } from '../utils/api';
 
 const RecruiterDashboard = ({ user }) => {
@@ -11,6 +11,9 @@ const RecruiterDashboard = ({ user }) => {
   const [jobApplications, setJobApplications] = useState([]);
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [showApplicationModal, setShowApplicationModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingJob, setEditingJob] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchData();
@@ -70,6 +73,32 @@ const RecruiterDashboard = ({ user }) => {
       } catch (err) {
         console.error(err);
       }
+    }
+  };
+
+  const openEditModal = (job) => {
+    setEditingJob({
+      ...job,
+      requirements: job.requirements.join('\n'),
+      techStack: job.techStack.join(', ')
+    });
+    setShowEditModal(true);
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const dataToSend = {
+        ...editingJob,
+        requirements: editingJob.requirements.split('\n').filter(r => r.trim()),
+        techStack: editingJob.techStack.split(',').map(t => t.trim()).filter(t => t)
+      };
+      await jobAPI.updateJob(editingJob._id, dataToSend);
+      setShowEditModal(false);
+      fetchData();
+    } catch (err) {
+      console.error(err);
+      alert('Failed to update job');
     }
   };
 
@@ -148,15 +177,26 @@ const RecruiterDashboard = ({ user }) => {
                     <span className="text-gray-500">
                       {applications.filter(a => a.job._id === job._id).length} applications
                     </span>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        deleteJob(job._id);
-                      }}
-                      className="text-red-500 hover:underline"
-                    >
-                      Delete
-                    </button>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openEditModal(job);
+                        }}
+                        className="text-blue-600 hover:underline"
+                      >
+                        Edit
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          deleteJob(job._id);
+                        }}
+                        className="text-red-500 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -289,6 +329,146 @@ const RecruiterDashboard = ({ user }) => {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showEditModal && editingJob && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-2xl font-bold">Edit Job</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Job Title *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editingJob.title}
+                    onChange={(e) => setEditingJob({ ...editingJob, title: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Company Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editingJob.company}
+                    onChange={(e) => setEditingJob({ ...editingJob, company: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Location *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editingJob.location}
+                    onChange={(e) => setEditingJob({ ...editingJob, location: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Job Type *</label>
+                  <select
+                    required
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editingJob.type}
+                    onChange={(e) => setEditingJob({ ...editingJob, type: e.target.value })}
+                  >
+                    <option value="Full-time">Full-time</option>
+                    <option value="Part-time">Part-time</option>
+                    <option value="Contract">Contract</option>
+                    <option value="Internship">Internship</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Salary</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.salary || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, salary: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Tech Stack * (comma-separated)</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.techStack}
+                  onChange={(e) => setEditingJob({ ...editingJob, techStack: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Description *</label>
+                <textarea
+                  required
+                  rows="5"
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.description}
+                  onChange={(e) => setEditingJob({ ...editingJob, description: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Requirements (one per line)</label>
+                <textarea
+                  rows="5"
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.requirements}
+                  onChange={(e) => setEditingJob({ ...editingJob, requirements: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Status</label>
+                <select
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.status}
+                  onChange={(e) => setEditingJob({ ...editingJob, status: e.target.value })}
+                >
+                  <option value="active">Active</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                >
+                  Update Job
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-6 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

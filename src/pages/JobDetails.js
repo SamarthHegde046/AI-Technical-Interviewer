@@ -1,16 +1,22 @@
+// pages/JobDetails.js
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { jobAPI } from '../utils/api';
+import { jobAPI, applicationAPI } from '../utils/api';
 
 const JobDetails = ({ user }) => {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [hasApplied, setHasApplied] = useState(false);
+  const [applicationStatus, setApplicationStatus] = useState(null);
   const { id } = useParams();
   const navigate = useNavigate();
 
   useEffect(() => {
     fetchJob();
-  }, [id]);
+    if (user && user.role === 'candidate') {
+      checkApplicationStatus();
+    }
+  }, [id, user]);
 
   const fetchJob = async () => {
     try {
@@ -20,6 +26,19 @@ const JobDetails = ({ user }) => {
       console.error(err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const checkApplicationStatus = async () => {
+    try {
+      const response = await applicationAPI.getMyApplications();
+      const application = response.data.find(app => app.job._id === id);
+      if (application) {
+        setHasApplied(true);
+        setApplicationStatus(application.status);
+      }
+    } catch (err) {
+      console.error(err);
     }
   };
 
@@ -90,12 +109,33 @@ const JobDetails = ({ user }) => {
         )}
 
         {user && user.role === 'candidate' && (
-          <Link
-            to={`/jobs/${job._id}/apply`}
-            className="inline-block bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700 text-lg"
-          >
-            Apply Now
-          </Link>
+          <>
+            {hasApplied ? (
+              <div className="flex items-center gap-3">
+                <button
+                  disabled
+                  className="px-6 py-3 bg-gray-400 text-white rounded cursor-not-allowed text-lg"
+                >
+                  Already Applied
+                </button>
+                <span className={`px-4 py-2 rounded text-sm font-medium ${
+                  applicationStatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                  applicationStatus === 'reviewed' ? 'bg-blue-100 text-blue-800' :
+                  applicationStatus === 'shortlisted' ? 'bg-green-100 text-green-800' :
+                  'bg-red-100 text-red-800'
+                }`}>
+                  Status: {applicationStatus?.charAt(0).toUpperCase() + applicationStatus?.slice(1)}
+                </span>
+              </div>
+            ) : (
+              <Link
+                to={`/jobs/${job._id}/apply`}
+                className="inline-block bg-blue-600 text-white px-6 py-3 rounded hover:bg-blue-700 text-lg"
+              >
+                Apply Now
+              </Link>
+            )}
+          </>
         )}
 
         {!user && (

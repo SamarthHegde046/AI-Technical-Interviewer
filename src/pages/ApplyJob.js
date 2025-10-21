@@ -1,8 +1,7 @@
 // pages/ApplyJob.js
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { jobAPI, applicationAPI } from '../utils/api';
-
+import { useParams, useNavigate,Link } from 'react-router-dom';
+import { jobAPI, applicationAPI, authAPI } from '../utils/api';
 const ApplyJob = ({ user }) => {
   const [job, setJob] = useState(null);
   const [formData, setFormData] = useState({
@@ -15,6 +14,7 @@ const ApplyJob = ({ user }) => {
     coverLetter: ''
   });
   const [loading, setLoading] = useState(false);
+  const [profileLoading, setProfileLoading] = useState(true);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const { id } = useParams();
@@ -22,6 +22,7 @@ const ApplyJob = ({ user }) => {
 
   useEffect(() => {
     fetchJob();
+    fetchProfileData();
   }, [id]);
 
   const fetchJob = async () => {
@@ -30,6 +31,37 @@ const ApplyJob = ({ user }) => {
       setJob(response.data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchProfileData = async () => {
+    try {
+      const response = await authAPI.getProfile();
+      const userData = response.data;
+      
+      // Auto-fill form with profile data
+      if (userData.profile) {
+        setFormData({
+          candidateName: userData.name || '',
+          candidateEmail: userData.email || '',
+          phone: userData.profile.phone || '',
+          techStack: userData.profile.techStack?.join(', ') || '',
+          experience: userData.profile.experience || '',
+          projects: userData.profile.projects?.length > 0 
+            ? userData.profile.projects.map(p => ({
+                name: p.name || '',
+                description: p.description || '',
+                githubLink: p.githubLink || '',
+                techUsed: Array.isArray(p.techUsed) ? p.techUsed.join(', ') : ''
+              }))
+            : [{ name: '', description: '', githubLink: '', techUsed: '' }],
+          coverLetter: ''
+        });
+      }
+    } catch (err) {
+      console.error('Failed to fetch profile:', err);
+    } finally {
+      setProfileLoading(false);
     }
   };
 
@@ -77,7 +109,7 @@ const ApplyJob = ({ user }) => {
     }
   };
 
-  if (!job) {
+  if (!job || profileLoading) {
     return <div className="container mx-auto px-4 py-8">Loading...</div>;
   }
 
@@ -94,7 +126,11 @@ const ApplyJob = ({ user }) => {
   return (
     <div className="container mx-auto px-4 py-8 max-w-3xl">
       <h1 className="text-3xl font-bold mb-2">Apply for {job.title}</h1>
-      <p className="text-gray-600 mb-6">at {job.company}</p>
+      <p className="text-gray-600 mb-2">at {job.company}</p>
+      <p className="text-sm text-blue-600 mb-6">
+        💡 Data auto-filled from your profile. You can edit it before submitting. 
+        <Link to="/candidate/profile" className="underline ml-1">Update Profile</Link>
+      </p>
 
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
