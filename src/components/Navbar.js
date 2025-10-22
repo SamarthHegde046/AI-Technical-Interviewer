@@ -6,6 +6,7 @@ const Navbar = ({ user, onLogout }) => {
   return (
     <nav className="bg-blue-600 text-white shadow-lg">
       <div className="container mx-auto px-4 py-3 flex justify-between items-center">
+        <img src='./icon.png' className='h-12 w-12' alt='JobPortal Icon'></img>
         <Link to="/" className="text-2xl font-bold">JobPortal</Link>
         
         <div className="flex items-center gap-4">
