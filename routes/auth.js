@@ -23,18 +23,23 @@ const generateOTP = () => {
 
 // Send OTP Email
 const sendOTPEmail = async (email, otp) => {
-  const mailOptions = {
-    from: process.env.EMAIL_USER,
-    to: email,
-    subject: 'Email Verification - Job Portal',
-    html: `
-      <h2>Email Verification</h2>
-      <p>Your OTP for email verification is: <strong>${otp}</strong></p>
-      <p>This OTP will expire in 10 minutes.</p>
-    `
-  };
-  
-  await transporter.sendMail(mailOptions);
+  try {
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Email Verification - Job Portal',
+      html: `
+        <h2>Email Verification</h2>
+        <p>Your OTP for email verification is: <strong>${otp}</strong></p>
+        <p>This OTP will expire in 10 minutes.Lawde bega hogo 10m ashte irodu</p>
+      `
+    };
+    
+    await transporter.sendMail(mailOptions);
+
+  } catch (error) {
+    console.error('❌ Email sending failed:', error.message);
+  }
 };
 
 // Register
@@ -68,9 +73,12 @@ router.post('/register', async (req, res) => {
 
     await user.save();
 
-    // Send OTP
-    await sendOTPEmail(email, otp);
+    // Send OTP asynchronously (don't wait for it)
+    sendOTPEmail(email, otp).catch(err => {
+      console.error('Error sending OTP email:', err);
+    });
 
+    // Respond immediately
     res.json({ 
       message: 'Registration successful. Please verify your email with OTP.',
       userId: user._id 
@@ -155,8 +163,10 @@ router.post('/resend-otp', async (req, res) => {
     user.otpExpiry = otpExpiry;
     await user.save();
 
-    // Send OTP
-    await sendOTPEmail(user.email, otp);
+    // Send OTP asynchronously
+    sendOTPEmail(user.email, otp).catch(err => {
+      console.error('Error sending OTP email:', err);
+    });
 
     res.json({ message: 'OTP resent successfully' });
   } catch (err) {
