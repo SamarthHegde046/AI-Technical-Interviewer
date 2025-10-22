@@ -31,14 +31,16 @@ const sendOTPEmail = async (email, otp) => {
       html: `
         <h2>Email Verification</h2>
         <p>Your OTP for email verification is: <strong>${otp}</strong></p>
-        <p>This OTP will expire in 10 minutes.Lawde bega hogo 10m ashte irodu</p>
+        <p>This OTP will expire in 10 minutes.Lawde bega hogo 10m ashte</p>
       `
     };
     
     await transporter.sendMail(mailOptions);
-
+    console.log(`✅ OTP sent to ${email}: ${otp}`);
   } catch (error) {
     console.error('❌ Email sending failed:', error.message);
+    // Log OTP to console for testing if email fails
+    console.log(`⚠️ OTP for ${email}: ${otp} (Email failed, use this OTP)`);
   }
 };
 
