@@ -3,45 +3,76 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const nodemailer = require('nodemailer');
 const User = require('../models/User');
 const { auth } = require('../middleware/auth');
 
-// Email transporter setup
-const transporter = nodemailer.createTransport({
-  service: 'gmail',
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS
-  }
-});
+// Email setup - Use Resend for production, Nodemailer for development
+let sendOTPEmail;
+
+if (process.env.RESEND_API_KEY) {
+  // Production: Use Resend
+  const { Resend } = require('resend');
+  const resend = new Resend(process.env.RESEND_API_KEY);
+  
+  sendOTPEmail = async (email, otp) => {
+    try {
+      await resend.emails.send({
+        from: 'samarthhegde93@notezy.online', // Use your verified domain in production
+        to: email,
+        subject: 'Email Verification - Job Portal',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Email Verification</h2>
+            <p>Your OTP for email verification is:</p>
+            <h1 style="background: #f4f4f4; padding: 20px; text-align: center; letter-spacing: 5px;">${otp}</h1>
+            <p style="color: #666;">This OTP will expire in 10 minutes.Lawde bega otp enter mado</p>
+          </div>
+        `
+      });
+      console.log(`✅ OTP sent to ${email} via Resend`);
+    } catch (error) {
+      console.error('❌ Resend email failed:', error);
+      console.log(`⚠️ OTP for ${email}: ${otp} (Use this for testing)`);
+    }
+  };
+} else {
+  // Development: Use Nodemailer
+  const nodemailer = require('nodemailer');
+  
+  const transporter = nodemailer.createTransport({
+    service: 'gmail',
+    auth: {
+      user: process.env.EMAIL_USER,
+      pass: process.env.EMAIL_PASS
+    }
+  });
+
+  sendOTPEmail = async (email, otp) => {
+    try {
+      await transporter.sendMail({
+        from: process.env.EMAIL_USER,
+        to: email,
+        subject: 'Email Verification - Job Portal',
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #333;">Email Verification</h2>
+            <p>Your OTP for email verification is:</p>
+            <h1 style="background: #f4f4f4; padding: 20px; text-align: center; letter-spacing: 5px;">${otp}</h1>
+            <p style="color: #666;">This OTP will expire in 10 minutes.</p>
+          </div>
+        `
+      });
+      console.log(`✅ OTP sent to ${email} via Gmail`);
+    } catch (error) {
+      console.error('❌ Email sending failed:', error.message);
+      console.log(`⚠️ OTP for ${email}: ${otp} (Email failed, use this OTP)`);
+    }
+  };
+}
 
 // Generate 6-digit OTP
 const generateOTP = () => {
   return Math.floor(100000 + Math.random() * 900000).toString();
-};
-
-// Send OTP Email
-const sendOTPEmail = async (email, otp) => {
-  try {
-    const mailOptions = {
-      from: process.env.EMAIL_USER,
-      to: email,
-      subject: 'Email Verification - Job Portal',
-      html: `
-        <h2>Email Verification</h2>
-        <p>Your OTP for email verification is: <strong>${otp}</strong></p>
-        <p>This OTP will expire in 10 minutes.Lawde bega hogo 10m ashte</p>
-      `
-    };
-    
-    await transporter.sendMail(mailOptions);
-    console.log(`✅ OTP sent to ${email}: ${otp}`);
-  } catch (error) {
-    console.error('❌ Email sending failed:', error.message);
-    // Log OTP to console for testing if email fails
-    console.log(`⚠️ OTP for ${email}: ${otp} (Email failed, use this OTP)`);
-  }
 };
 
 // Register
