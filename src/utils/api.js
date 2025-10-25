@@ -40,6 +40,7 @@ export const applicationAPI = {
   getAllApplications: () => api.get('/applications/recruiter/all'),
   updateStatus: (id, status) => api.patch(`/applications/${id}/status`, { status }),
   getApplication: (id) => api.get(`/applications/${id}`),
+  analyzeProject: (applicationId, projectIndex) => api.post(`/applications/${applicationId}/analyze-project/${projectIndex}`),
 };
 
 export default api;
