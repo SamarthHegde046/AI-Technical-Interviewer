@@ -13,7 +13,40 @@ const applicationSchema = new mongoose.Schema({
     name: { type: String, required: true },
     description: { type: String, required: true },
     githubLink: { type: String, required: true },
-    techUsed: [{ type: String }]
+    techUsed: [{ type: String }],
+    // AI Detection Results
+    aiAnalysis: {
+      status: { type: String, enum: ['pending', 'analyzing', 'completed', 'failed'], default: 'pending' },
+      summary: {
+        total_files_found: Number,
+        files_analyzed: Number,
+        ai_files: Number,
+        human_files: Number,
+        ai_percentage: Number,
+        human_percentage: Number,
+        avg_confidence: Number,
+        total_lines: Number,
+        total_ai_lines: Number,
+        total_human_lines: Number,
+        ai_lines_percentage: Number,
+        human_lines_percentage: Number
+      },
+      files: [{
+        file_path: String,
+        prediction: String,
+        confidence: Number,
+        line_count: Number,
+        ai_lines: Number,
+        human_lines: Number
+      }],
+      repository: {
+        owner: String,
+        name: String,
+        url: String
+      },
+      analyzedAt: Date,
+      error: String
+    }
   }],
   resume: { type: String },
   coverLetter: { type: String },

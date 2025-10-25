@@ -9,7 +9,7 @@ const userSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   otp: { type: String },
   otpExpiry: { type: Date },
-
+  // Candidate Profile Fields
   profile: {
     phone: { type: String },
     location: { type: String },
