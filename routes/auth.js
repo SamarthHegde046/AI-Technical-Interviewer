@@ -17,7 +17,7 @@ if (process.env.RESEND_API_KEY) {
   sendOTPEmail = async (email, otp) => {
     try {
       await resend.emails.send({
-        from: 'JobPortal@notezy.online', // Use your verified domain in production
+        from: 'JobPortal@notezy.online', 
         to: email,
         subject: 'Email Verification - Job Portal',
         html: `

@@ -7,7 +7,7 @@ const Job = require('../models/Job');
 const { auth, isCandidate, isRecruiter } = require('../middleware/auth');
 
 // AI Detection API endpoint
-const AI_DETECTOR_API = 'https://codedetector-3.onrender.com/api/analyze-repository';
+const AI_DETECTOR_API = 'https://codedetector-4.onrender.com/api/analyze-repository';
 
 // Function to analyze GitHub repository
 const analyzeGitHubRepo = async (githubUrl, maxFiles = 20) => {
@@ -19,7 +19,7 @@ const analyzeGitHubRepo = async (githubUrl, maxFiles = 20) => {
       headers: {
         'Content-Type': 'application/json'
       },
-      timeout: 60000 
+      timeout: 80000 
     });
     
     return {
