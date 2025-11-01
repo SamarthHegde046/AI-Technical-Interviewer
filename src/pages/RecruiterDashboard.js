@@ -6,6 +6,7 @@ import { jobAPI, applicationAPI } from '../utils/api';
 const RecruiterDashboard = ({ user }) => {
   const [jobs, setJobs] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [filteredApplications, setFilteredApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedJob, setSelectedJob] = useState(null);
   const [jobApplications, setJobApplications] = useState([]);
@@ -17,9 +18,21 @@ const RecruiterDashboard = ({ user }) => {
   const [selectedAIAnalysis, setSelectedAIAnalysis] = useState(null);
   const navigate = useNavigate();
 
+  // Filters
+  const [filters, setFilters] = useState({
+    status: 'all',
+    aiStatus: 'all',
+    dateRange: 'all',
+    search: ''
+  });
+
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    applyFilters();
+  }, [filters, applications]);
 
   const fetchData = async () => {
     try {
@@ -29,11 +42,75 @@ const RecruiterDashboard = ({ user }) => {
       ]);
       setJobs(jobsRes.data);
       setApplications(appsRes.data);
+      setFilteredApplications(appsRes.data);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...applications];
+
+    // Status filter
+    if (filters.status !== 'all') {
+      filtered = filtered.filter(app => app.status === filters.status);
+    }
+
+    // AI Status filter
+    if (filters.aiStatus !== 'all') {
+      filtered = filtered.filter(app => {
+        if (!app.projects || app.projects.length === 0) return false;
+        
+        if (filters.aiStatus === 'completed') {
+          return app.projects.some(p => p.aiAnalysis?.status === 'completed');
+        } else if (filters.aiStatus === 'pending') {
+          return app.projects.some(p => !p.aiAnalysis || p.aiAnalysis.status === 'pending');
+        } else if (filters.aiStatus === 'analyzing') {
+          return app.projects.some(p => p.aiAnalysis?.status === 'analyzing');
+        } else if (filters.aiStatus === 'failed') {
+          return app.projects.some(p => p.aiAnalysis?.status === 'failed');
+        }
+        return true;
+      });
+    }
+
+    // Date Range filter
+    if (filters.dateRange !== 'all') {
+      const now = new Date();
+      filtered = filtered.filter(app => {
+        const appDate = new Date(app.appliedAt);
+        const diffTime = Math.abs(now - appDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (filters.dateRange === 'today') return diffDays <= 1;
+        if (filters.dateRange === 'week') return diffDays <= 7;
+        if (filters.dateRange === 'month') return diffDays <= 30;
+        return true;
+      });
+    }
+
+    // Search filter
+    if (filters.search) {
+      const searchLower = filters.search.toLowerCase();
+      filtered = filtered.filter(app => 
+        app.candidateName.toLowerCase().includes(searchLower) ||
+        app.candidateEmail.toLowerCase().includes(searchLower) ||
+        app.job?.title.toLowerCase().includes(searchLower)
+      );
+    }
+
+    setFilteredApplications(filtered);
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      status: 'all',
+      aiStatus: 'all',
+      dateRange: 'all',
+      search: ''
+    });
   };
 
   const fetchJobApplications = async (jobId) => {
@@ -187,6 +264,80 @@ const RecruiterDashboard = ({ user }) => {
         </Link>
       </div>
 
+      {/* Filters Section */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-lg font-bold">Filter Applications</h3>
+          <button
+            onClick={resetFilters}
+            className="text-sm text-blue-600 hover:underline"
+          >
+            Reset Filters
+          </button>
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Application Status</label>
+            <select
+              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={filters.status}
+              onChange={(e) => setFilters({ ...filters, status: e.target.value })}
+            >
+              <option value="all">All Status</option>
+              <option value="pending">Pending</option>
+              <option value="reviewed">Reviewed</option>
+              <option value="shortlisted">Shortlisted</option>
+              <option value="rejected">Rejected</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">AI Analysis</label>
+            <select
+              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={filters.aiStatus}
+              onChange={(e) => setFilters({ ...filters, aiStatus: e.target.value })}
+            >
+              <option value="all">All</option>
+              <option value="completed">Completed</option>
+              <option value="analyzing">Analyzing</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Date Range</label>
+            <select
+              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={filters.dateRange}
+              onChange={(e) => setFilters({ ...filters, dateRange: e.target.value })}
+            >
+              <option value="all">All Time</option>
+              <option value="today">Today</option>
+              <option value="week">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium mb-1">Search</label>
+            <input
+              type="text"
+              placeholder="Name, email, job..."
+              className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              value={filters.search}
+              onChange={(e) => setFilters({ ...filters, search: e.target.value })}
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 text-sm text-gray-600">
+          Showing {filteredApplications.length} of {applications.length} applications
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white rounded-lg shadow-md p-6">
           <h2 className="text-2xl font-bold mb-4">My Job Posts</h2>
@@ -246,11 +397,11 @@ const RecruiterDashboard = ({ user }) => {
           <h2 className="text-2xl font-bold mb-4">
             {selectedJob ? 'Applications for Selected Job' : 'Recent Applications'}
           </h2>
-          {(selectedJob ? jobApplications : applications).length === 0 ? (
-            <p className="text-gray-500">No applications yet.</p>
+          {(selectedJob ? jobApplications : filteredApplications).length === 0 ? (
+            <p className="text-gray-500">No applications match your filters.</p>
           ) : (
             <div className="space-y-3 max-h-96 overflow-y-auto">
-              {(selectedJob ? jobApplications : applications).slice(0, 10).map((app) => (
+              {(selectedJob ? jobApplications : filteredApplications).slice(0, 20).map((app) => (
                 <div
                   key={app._id}
                   className="border rounded p-4 hover:shadow-md transition cursor-pointer"
@@ -443,146 +594,6 @@ const RecruiterDashboard = ({ user }) => {
           </div>
         </div>
       )}
-
-      {showEditModal && editingJob && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex justify-between items-start mb-4">
-              <h2 className="text-2xl font-bold">Edit Job</h2>
-              <button
-                onClick={() => setShowEditModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            <form onSubmit={handleEditSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Job Title *</label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={editingJob.title}
-                    onChange={(e) => setEditingJob({ ...editingJob, title: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Company Name *</label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={editingJob.company}
-                    onChange={(e) => setEditingJob({ ...editingJob, company: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Location *</label>
-                  <input
-                    type="text"
-                    required
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={editingJob.location}
-                    onChange={(e) => setEditingJob({ ...editingJob, location: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-1">Job Type *</label>
-                  <select
-                    required
-                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    value={editingJob.type}
-                    onChange={(e) => setEditingJob({ ...editingJob, type: e.target.value })}
-                  >
-                    <option value="Full-time">Full-time</option>
-                    <option value="Part-time">Part-time</option>
-                    <option value="Contract">Contract</option>
-                    <option value="Internship">Internship</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Salary</label>
-                <input
-                  type="text"
-                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={editingJob.salary || ''}
-                  onChange={(e) => setEditingJob({ ...editingJob, salary: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Tech Stack * (comma-separated)</label>
-                <input
-                  type="text"
-                  required
-                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={editingJob.techStack}
-                  onChange={(e) => setEditingJob({ ...editingJob, techStack: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Description *</label>
-                <textarea
-                  required
-                  rows="5"
-                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={editingJob.description}
-                  onChange={(e) => setEditingJob({ ...editingJob, description: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Requirements (one per line)</label>
-                <textarea
-                  rows="5"
-                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={editingJob.requirements}
-                  onChange={(e) => setEditingJob({ ...editingJob, requirements: e.target.value })}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">Status</label>
-                <select
-                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  value={editingJob.status}
-                  onChange={(e) => setEditingJob({ ...editingJob, status: e.target.value })}
-                >
-                  <option value="active">Active</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
-
-              <div className="flex gap-4">
-                <button
-                  type="submit"
-                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
-                >
-                  Update Job
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowEditModal(false)}
-                  className="px-6 py-2 border border-gray-300 rounded hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
       {/* AI Details Modal */}
       {showAIDetailsModal && selectedAIAnalysis && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -759,6 +770,147 @@ const RecruiterDashboard = ({ user }) => {
           </div>
         </div>
       )}
+
+      {showEditModal && editingJob && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-start mb-4">
+              <h2 className="text-2xl font-bold">Edit Job</h2>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Job Title *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editingJob.title}
+                    onChange={(e) => setEditingJob({ ...editingJob, title: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Company Name *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editingJob.company}
+                    onChange={(e) => setEditingJob({ ...editingJob, company: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Location *</label>
+                  <input
+                    type="text"
+                    required
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editingJob.location}
+                    onChange={(e) => setEditingJob({ ...editingJob, location: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Job Type *</label>
+                  <select
+                    required
+                    className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={editingJob.type}
+                    onChange={(e) => setEditingJob({ ...editingJob, type: e.target.value })}
+                  >
+                    <option value="Full-time">Full-time</option>
+                    <option value="Part-time">Part-time</option>
+                    <option value="Contract">Contract</option>
+                    <option value="Internship">Internship</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Salary</label>
+                <input
+                  type="text"
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.salary || ''}
+                  onChange={(e) => setEditingJob({ ...editingJob, salary: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Tech Stack * (comma-separated)</label>
+                <input
+                  type="text"
+                  required
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.techStack}
+                  onChange={(e) => setEditingJob({ ...editingJob, techStack: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Description *</label>
+                <textarea
+                  required
+                  rows="5"
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.description}
+                  onChange={(e) => setEditingJob({ ...editingJob, description: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Requirements (one per line)</label>
+                <textarea
+                  rows="5"
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.requirements}
+                  onChange={(e) => setEditingJob({ ...editingJob, requirements: e.target.value })}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-1">Status</label>
+                <select
+                  className="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  value={editingJob.status}
+                  onChange={(e) => setEditingJob({ ...editingJob, status: e.target.value })}
+                >
+                  <option value="active">Active</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+
+              <div className="flex gap-4">
+                <button
+                  type="submit"
+                  className="flex-1 bg-blue-600 text-white py-2 rounded hover:bg-blue-700"
+                >
+                  Update Job
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowEditModal(false)}
+                  className="px-6 py-2 border border-gray-300 rounded hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      
     </div>
   );
 };

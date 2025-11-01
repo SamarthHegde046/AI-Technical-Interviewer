@@ -1,7 +1,8 @@
 // pages/ApplyJob.js
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate,Link } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { jobAPI, applicationAPI, authAPI } from '../utils/api';
+
 const ApplyJob = ({ user }) => {
   const [job, setJob] = useState(null);
   const [formData, setFormData] = useState({

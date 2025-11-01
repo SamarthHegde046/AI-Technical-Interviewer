@@ -5,24 +5,67 @@ import { applicationAPI, authAPI } from '../utils/api';
 
 const CandidateDashboard = ({ user }) => {
   const [applications, setApplications] = useState([]);
+  const [filteredApplications, setFilteredApplications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [profileCompletion, setProfileCompletion] = useState(0);
   const [profileData, setProfileData] = useState(null);
+  const [filters, setFilters] = useState({
+    status: 'all',
+    dateRange: 'all'
+  });
 
   useEffect(() => {
     fetchApplications();
     fetchProfile();
   }, []);
 
+  useEffect(() => {
+    applyFilters();
+  }, [filters, applications]);
+
   const fetchApplications = async () => {
     try {
       const response = await applicationAPI.getMyApplications();
       setApplications(response.data);
+      setFilteredApplications(response.data);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...applications];
+
+    // Status filter
+    if (filters.status !== 'all') {
+      filtered = filtered.filter(app => app.status === filters.status);
+    }
+
+    // Date Range filter
+    if (filters.dateRange !== 'all') {
+      const now = new Date();
+      filtered = filtered.filter(app => {
+        const appDate = new Date(app.appliedAt);
+        const diffTime = Math.abs(now - appDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (filters.dateRange === 'today') return diffDays <= 1;
+        if (filters.dateRange === 'week') return diffDays <= 7;
+        if (filters.dateRange === 'month') return diffDays <= 30;
+        return true;
+      });
+    }
+
+    setFilteredApplications(filtered);
+  };
+
+  const resetFilters = () => {
+    setFilters({
+      status: 'all',
+      dateRange: 'all'
+    });
   };
 
   const fetchProfile = async () => {
@@ -105,16 +148,22 @@ const CandidateDashboard = ({ user }) => {
 
         {loading ? (
           <p>Loading applications...</p>
-        ) : applications.length === 0 ? (
+        ) : filteredApplications.length === 0 ? (
           <div className="text-center py-8 text-gray-500">
-            <p className="mb-4">You haven't applied to any jobs yet.</p>
-            <Link to="/" className="text-blue-600 hover:underline">
-              Start browsing jobs
-            </Link>
+            {applications.length === 0 ? (
+              <>
+                <p className="mb-4">You haven't applied to any jobs yet.</p>
+                <Link to="/" className="text-blue-600 hover:underline">
+                  Start browsing jobs
+                </Link>
+              </>
+            ) : (
+              <p>No applications match your filters.</p>
+            )}
           </div>
         ) : (
           <div className="space-y-4">
-            {applications.map((app) => (
+            {filteredApplications.map((app) => (
               <div key={app._id} className="border rounded-lg p-4 hover:shadow-md transition">
                 <div className="flex justify-between items-start mb-2">
                   <div>
