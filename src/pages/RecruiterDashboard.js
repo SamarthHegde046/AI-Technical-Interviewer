@@ -16,6 +16,8 @@ const RecruiterDashboard = ({ user }) => {
   const [editingJob, setEditingJob] = useState(null);
   const [showAIDetailsModal, setShowAIDetailsModal] = useState(false);
   const [selectedAIAnalysis, setSelectedAIAnalysis] = useState(null);
+  const [showScheduleCallModal, setShowScheduleCallModal] = useState(false);
+  const [scheduleCallData, setScheduleCallData] = useState(null);
   const navigate = useNavigate();
 
   // Filters
@@ -215,6 +217,19 @@ const RecruiterDashboard = ({ user }) => {
       console.error(err);
       alert('Failed to trigger analysis');
     }
+  };
+
+  const handleScheduleCall = (application) => {
+    setScheduleCallData({
+      candidateName: application.candidateName,
+      candidateEmail: application.candidateEmail,
+      phone: application.phone,
+      userId: application.candidate._id,
+      jobTitle: application.job.title,
+      company: application.job.company,
+      applicationId: application._id
+    });
+    setShowScheduleCallModal(true);
   };
 
   const getStatusColor = (status) => {
@@ -569,7 +584,7 @@ const RecruiterDashboard = ({ user }) => {
 
               <div>
                 <h3 className="font-semibold text-lg mb-2">Update Status</h3>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={() => updateApplicationStatus(selectedApplication._id, 'reviewed')}
                     className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
@@ -590,183 +605,19 @@ const RecruiterDashboard = ({ user }) => {
                   </button>
                 </div>
               </div>
+
+              {/* Schedule Call Button - Only for Shortlisted */}
+              {selectedApplication.status === 'shortlisted' && (
+                <div className="pt-4 border-t">
+                  <button
+                    onClick={() => handleScheduleCall(selectedApplication)}
+                    className="w-full bg-purple-600 text-white py-3 rounded-lg hover:bg-purple-700 font-semibold flex items-center justify-center gap-2"
+                  >
+                    <span>📞</span> Schedule Call with Candidate
+                  </button>
+                </div>
+              )}
             </div>
-          </div>
-        </div>
-      )}
-      {/* AI Details Modal */}
-      {showAIDetailsModal && selectedAIAnalysis && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto p-6">
-            <div className="flex justify-between items-start mb-4">
-              <div>
-                <h2 className="text-2xl font-bold">AI Code Detection Analysis</h2>
-                <p className="text-gray-600">{selectedAIAnalysis.projectName}</p>
-              </div>
-              <button
-                onClick={() => setShowAIDetailsModal(false)}
-                className="text-gray-500 hover:text-gray-700 text-2xl"
-              >
-                ×
-              </button>
-            </div>
-
-            {selectedAIAnalysis.status === 'completed' && selectedAIAnalysis.summary && (
-              <>
-                {/* Summary Cards */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600">Files Analyzed</p>
-                    <p className="text-2xl font-bold text-blue-600">
-                      {selectedAIAnalysis.summary.files_analyzed}
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      of {selectedAIAnalysis.summary.total_files_found} found
-                    </p>
-                  </div>
-                  <div className="bg-red-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600">AI Generated</p>
-                    <p className="text-2xl font-bold text-red-600">
-                      {selectedAIAnalysis.summary.ai_percentage.toFixed(1)}%
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {selectedAIAnalysis.summary.ai_files} files
-                    </p>
-                  </div>
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600">Human Written</p>
-                    <p className="text-2xl font-bold text-green-600">
-                      {selectedAIAnalysis.summary.human_percentage.toFixed(1)}%
-                    </p>
-                    <p className="text-xs text-gray-500">
-                      {selectedAIAnalysis.summary.human_files} files
-                    </p>
-                  </div>
-                  <div className="bg-purple-50 p-4 rounded-lg">
-                    <p className="text-sm text-gray-600">Avg Confidence</p>
-                    <p className="text-2xl font-bold text-purple-600">
-                      {(selectedAIAnalysis.summary.avg_confidence * 100).toFixed(1)}%
-                    </p>
-                    <p className="text-xs text-gray-500">Detection accuracy</p>
-                  </div>
-                </div>
-
-                {/* Lines Analysis */}
-                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
-                  <h3 className="font-semibold mb-3">Code Lines Analysis</h3>
-                  <div className="grid grid-cols-3 gap-4 text-center">
-                    <div>
-                      <p className="text-2xl font-bold">{selectedAIAnalysis.summary.total_lines}</p>
-                      <p className="text-sm text-gray-600">Total Lines</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-red-600">{selectedAIAnalysis.summary.total_ai_lines}</p>
-                      <p className="text-sm text-gray-600">AI Lines ({selectedAIAnalysis.summary.ai_lines_percentage.toFixed(1)}%)</p>
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold text-green-600">{selectedAIAnalysis.summary.total_human_lines}</p>
-                      <p className="text-sm text-gray-600">Human Lines ({selectedAIAnalysis.summary.human_lines_percentage.toFixed(1)}%)</p>
-                    </div>
-                  </div>
-                  <div className="mt-3 w-full bg-gray-200 rounded-full h-4 overflow-hidden">
-                    <div
-                      className="bg-gradient-to-r from-red-500 to-red-600 h-full float-left"
-                      style={{ width: `${selectedAIAnalysis.summary.ai_lines_percentage}%` }}
-                    ></div>
-                    <div
-                      className="bg-gradient-to-r from-green-500 to-green-600 h-full float-left"
-                      style={{ width: `${selectedAIAnalysis.summary.human_lines_percentage}%` }}
-                    ></div>
-                  </div>
-                </div>
-
-                {/* File-by-File Analysis */}
-                <div>
-                  <h3 className="font-semibold text-lg mb-3">Detailed File Analysis</h3>
-                  <div className="space-y-2 max-h-96 overflow-y-auto">
-                    {selectedAIAnalysis.files && selectedAIAnalysis.files.map((file, idx) => (
-                      <div
-                        key={idx}
-                        className={`p-3 rounded border-l-4 ${
-                          file.prediction === 'ai'
-                            ? 'bg-red-50 border-red-500'
-                            : 'bg-green-50 border-green-500'
-                        }`}
-                      >
-                        <div className="flex justify-between items-start">
-                          <div className="flex-1">
-                            <p className="font-mono text-sm font-semibold">{file.file_path}</p>
-                            <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
-                              <div>
-                                <span className="text-gray-600">Prediction:</span>
-                                <span
-                                  className={`ml-1 font-semibold ${
-                                    file.prediction === 'ai' ? 'text-red-600' : 'text-green-600'
-                                  }`}
-                                >
-                                  {file.prediction === 'ai' ? '🤖 AI' : '👨‍💻 Human'}
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Confidence:</span>
-                                <span className="ml-1 font-semibold">
-                                  {(file.confidence * 100).toFixed(1)}%
-                                </span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">Total Lines:</span>
-                                <span className="ml-1 font-semibold">{file.line_count}</span>
-                              </div>
-                              <div>
-                                <span className="text-gray-600">AI/Human:</span>
-                                <span className="ml-1 font-semibold text-red-600">{file.ai_lines}</span>
-                                <span className="mx-1">/</span>
-                                <span className="font-semibold text-green-600">{file.human_lines}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Repository Info */}
-                {selectedAIAnalysis.repository && (
-                  <div className="mt-6 p-4 bg-gray-100 rounded-lg">
-                    <h3 className="font-semibold mb-2">Repository Information</h3>
-                    <p className="text-sm">
-                      <span className="text-gray-600">Owner:</span>{' '}
-                      <span className="font-semibold">{selectedAIAnalysis.repository.owner}</span>
-                    </p>
-                    <p className="text-sm">
-                      <span className="text-gray-600">Repository:</span>{' '}
-                      <span className="font-semibold">{selectedAIAnalysis.repository.name}</span>
-                    </p>
-                    <a
-                      href={selectedAIAnalysis.repository.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 hover:underline text-sm"
-                    >
-                      View Repository →
-                    </a>
-                  </div>
-                )}
-
-                <div className="mt-4 text-xs text-gray-500 text-center">
-                  <p>⚠️ Note: Currently analyzing Python files only. More languages coming soon.</p>
-                  <p>Analysis performed at: {new Date(selectedAIAnalysis.analyzedAt).toLocaleString()}</p>
-                </div>
-              </>
-            )}
-
-            {selectedAIAnalysis.status === 'failed' && (
-              <div className="bg-red-50 border border-red-200 rounded p-4">
-                <p className="text-red-700">❌ Analysis Failed</p>
-                <p className="text-sm text-gray-600 mt-2">{selectedAIAnalysis.error}</p>
-              </div>
-            )}
           </div>
         </div>
       )}
@@ -910,9 +761,142 @@ const RecruiterDashboard = ({ user }) => {
           </div>
         </div>
       )}
-      
+      {showScheduleCallModal && scheduleCallData && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full p-6">
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">📞 Schedule Call</h2>
+                <p className="text-gray-600 mt-1">Candidate contact information</p>
+              </div>
+              <button
+                onClick={() => setShowScheduleCallModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg p-6 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+                      Candidate Name
+                    </label>
+                    <p className="text-xl font-bold text-gray-900 mt-1">
+                      {scheduleCallData.candidateName}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+                      Phone Number
+                    </label>
+                    <p className="text-lg font-semibold text-purple-600 mt-1 flex items-center gap-2">
+                      📱 {scheduleCallData.phone}
+                      <button
+                        onClick={() => navigator.clipboard.writeText(scheduleCallData.phone)}
+                        className="text-xs bg-white px-2 py-1 rounded hover:bg-gray-100"
+                        title="Copy to clipboard"
+                      >
+                        Copy
+                      </button>
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+                      Email Address
+                    </label>
+                    <p className="text-lg font-semibold text-blue-600 mt-1 flex items-center gap-2 break-all">
+                      ✉️ {scheduleCallData.candidateEmail}
+                      <button
+                        onClick={() => navigator.clipboard.writeText(scheduleCallData.candidateEmail)}
+                        className="text-xs bg-white px-2 py-1 rounded hover:bg-gray-100 flex-shrink-0"
+                        title="Copy to clipboard"
+                      >
+                        Copy
+                      </button>
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+                      User ID
+                    </label>
+                    <p className="text-sm font-mono bg-white px-3 py-2 rounded border border-gray-200 mt-1">
+                      {scheduleCallData.userId}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+                      Applied For
+                    </label>
+                    <p className="text-lg font-bold text-gray-900 mt-1">
+                      {scheduleCallData.jobTitle}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+                      Company
+                    </label>
+                    <p className="text-lg font-semibold text-gray-700 mt-1">
+                      {scheduleCallData.company}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-sm font-semibold text-gray-600 uppercase tracking-wide">
+                      Application ID
+                    </label>
+                    <p className="text-sm font-mono bg-white px-3 py-2 rounded border border-gray-200 mt-1 break-all">
+                      {scheduleCallData.applicationId}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+              <h3 className="font-semibold text-yellow-900 mb-2">🔔 Quick Actions</h3>
+              <div className="space-y-2 text-sm text-yellow-800">
+                <p>• Click the Copy buttons to copy contact information</p>
+                <p>• Use this information to schedule a call via your preferred platform</p>
+                <p>• This feature will integrate with scheduling APIs in future updates</p>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <a
+                href={`tel:${scheduleCallData.phone}`}
+                className="flex-1 bg-green-600 text-white py-3 rounded-lg hover:bg-green-700 font-semibold text-center"
+              >
+                📞 Call Now
+              </a>
+              <a
+                href={`mailto:${scheduleCallData.candidateEmail}?subject=Interview Schedule - ${scheduleCallData.jobTitle}`}
+                className="flex-1 bg-blue-600 text-white py-3 rounded-lg hover:bg-blue-700 font-semibold text-center"
+              >
+                ✉️ Send Email
+              </a>
+              <button
+                onClick={() => setShowScheduleCallModal(false)}
+                className="px-6 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-semibold"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
+
 
 export default RecruiterDashboard;

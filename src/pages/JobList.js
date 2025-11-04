@@ -10,6 +10,28 @@ const JobList = ({ user }) => {
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({ search: '', location: '', type: '' });
   const [userProfile, setUserProfile] = useState(null);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
+// First useEffect - Initial load
+useEffect(() => {
+  const initializeData = async () => {
+    if (user && user.role === 'candidate') {
+      await fetchUserProfile();  // Wait for profile
+      setProfileLoaded(true);    // Signal completion
+    } else {
+      await fetchJobs();         // Non-candidates fetch directly
+    }
+  };
+  
+  initializeData();
+}, [user]);
+
+// Second useEffect - Fetch jobs after profile
+useEffect(() => {
+  if (user && user.role === 'candidate' && profileLoaded) {
+    fetchJobs();  // Now fetch with profile data
+  }
+}, [profileLoaded, userProfile]);
 
   useEffect(() => {
     fetchJobs();
