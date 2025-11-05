@@ -12,6 +12,8 @@ const AI_DETECTOR_API = 'https://codedetector-4.onrender.com/api/analyze-reposit
 // Function to analyze GitHub repository
 const analyzeGitHubRepo = async (githubUrl, maxFiles = 20) => {
   try {
+    console.log(`Starting AI analysis for: ${githubUrl}`);
+    
     const response = await axios.post(AI_DETECTOR_API, {
       github_url: githubUrl,
       max_files: maxFiles
@@ -19,8 +21,10 @@ const analyzeGitHubRepo = async (githubUrl, maxFiles = 20) => {
       headers: {
         'Content-Type': 'application/json'
       },
-      timeout: 80000 
+      timeout: 120000 // 120 second timeout (increased)
     });
+    
+    console.log('AI analysis completed successfully');
     
     return {
       status: 'completed',
@@ -31,9 +35,23 @@ const analyzeGitHubRepo = async (githubUrl, maxFiles = 20) => {
     };
   } catch (error) {
     console.error('AI Detection Error:', error.message);
+    
+    // Handle different error types
+    let errorMessage = 'Analysis failed';
+    
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      errorMessage = 'Analysis timed out. The repository might be too large.';
+    } else if (error.response?.status === 502 || error.response?.status === 503) {
+      errorMessage = 'AI service temporarily unavailable. Please try again later.';
+    } else if (error.response?.status === 404) {
+      errorMessage = 'Repository not found or private. Please use a public repository.';
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    }
+    
     return {
       status: 'failed',
-      error: error.response?.data?.error || error.message || 'Analysis failed',
+      error: errorMessage,
       analyzedAt: new Date()
     };
   }
@@ -98,7 +116,11 @@ router.post('/', auth, isCandidate, async (req, res) => {
       for (let i = 0; i < projects.length; i++) {
         if (projects[i].githubLink) {
           try {
-            application.projects[i].aiAnalysis.status = 'analyzing';
+            console.log(`Starting analysis for project ${i}: ${projects[i].name}`);
+            
+            application.projects[i].aiAnalysis = {
+              status: 'analyzing'
+            };
             await application.save();
 
             const analysisResult = await analyzeGitHubRepo(projects[i].githubLink);
@@ -106,11 +128,18 @@ router.post('/', auth, isCandidate, async (req, res) => {
             application.projects[i].aiAnalysis = analysisResult;
             await application.save();
             
-            console.log(`✅ Analysis completed for project: ${projects[i].name}`);
+            if (analysisResult.status === 'completed') {
+              console.log(`✅ Analysis completed for project: ${projects[i].name}`);
+            } else {
+              console.log(`⚠️ Analysis failed for project: ${projects[i].name} - ${analysisResult.error}`);
+            }
           } catch (error) {
-            console.error(`❌ Analysis failed for project: ${projects[i].name}`, error);
-            application.projects[i].aiAnalysis.status = 'failed';
-            application.projects[i].aiAnalysis.error = 'Analysis failed';
+            console.error(`❌ Analysis error for project: ${projects[i].name}`, error);
+            application.projects[i].aiAnalysis = {
+              status: 'failed',
+              error: 'Unexpected error during analysis',
+              analyzedAt: new Date()
+            };
             await application.save();
           }
         }
@@ -242,12 +271,13 @@ router.post('/:id/analyze-project/:projectIndex', auth, isRecruiter, async (req,
       return res.status(404).json({ message: 'Application not found' });
     }
 
-    if (application.job.recruiter.toString() !== req.user.userId) {
+    // Verify the job belongs to this recruiter
+    if (!application.job || application.job.recruiter.toString() !== req.user.userId) {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
     const projectIndex = parseInt(req.params.projectIndex);
-    if (projectIndex < 0 || projectIndex >= application.projects.length) {
+    if (isNaN(projectIndex) || projectIndex < 0 || projectIndex >= application.projects.length) {
       return res.status(400).json({ message: 'Invalid project index' });
     }
 
@@ -258,7 +288,9 @@ router.post('/:id/analyze-project/:projectIndex', auth, isRecruiter, async (req,
     }
 
     // Start analysis
-    application.projects[projectIndex].aiAnalysis.status = 'analyzing';
+    application.projects[projectIndex].aiAnalysis = {
+      status: 'analyzing'
+    };
     await application.save();
 
     // Perform analysis
@@ -268,11 +300,11 @@ router.post('/:id/analyze-project/:projectIndex', auth, isRecruiter, async (req,
     await application.save();
 
     res.json({ 
-      message: 'Analysis completed',
+      message: analysisResult.status === 'completed' ? 'Analysis completed' : 'Analysis failed',
       analysis: application.projects[projectIndex].aiAnalysis 
     });
   } catch (err) {
-    console.error(err);
+    console.error('Manual analysis error:', err);
     res.status(500).json({ message: 'Server error' });
   }
 });
