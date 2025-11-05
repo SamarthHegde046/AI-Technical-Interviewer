@@ -19,7 +19,7 @@ useEffect(() => {
       await fetchUserProfile();  // Wait for profile
       setProfileLoaded(true);    // Signal completion
     } else {
-      await fetchJobs();         // Non-candidates fetch directly
+      await fetchJobs();         
     }
   };
   
