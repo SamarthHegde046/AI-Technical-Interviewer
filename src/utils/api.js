@@ -1,7 +1,9 @@
 // utils/api.js
 import axios from 'axios';
 
-const API_URL = 'https://ai-technical-interviewer.onrender.com/api';
+const API_URL = process.env.NODE_ENV === 'production' 
+  ? 'https://ai-technical-interviewer.onrender.com/api'
+  : 'http://localhost:5000/api';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -31,6 +33,15 @@ export const jobAPI = {
   getMyJobs: () => api.get('/jobs/recruiter/my-jobs'),
   updateJob: (id, data) => api.put(`/jobs/${id}`, data),
   deleteJob: (id) => api.delete(`/jobs/${id}`),
+};
+
+export const shortlistedAPI = {
+  getAllShortlisted: () => api.get('/shortlisted'),
+  getCandidate: (id) => api.get(`/shortlisted/${id}`),
+  getCandidateAIFormat: (id) => api.get(`/shortlisted/${id}/ai-format`),
+  updateInterviewStatus: (id, data) => api.patch(`/shortlisted/${id}/interview-status`, data),
+  exportAIData: () => api.get('/shortlisted/export/ai-scheduling-data'),
+  getPendingCandidates: () => api.get('/shortlisted/pending-interviews'),
 };
 
 export const applicationAPI = {

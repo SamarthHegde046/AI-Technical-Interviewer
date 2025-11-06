@@ -1,5 +1,4 @@
 // components/Navbar.js
-import React from 'react';
 import { Link } from 'react-router-dom';
 
 const Navbar = ({ user, onLogout }) => {
@@ -25,6 +24,14 @@ const Navbar = ({ user, onLogout }) => {
                   className="px-4 py-2 bg-blue-700 rounded hover:bg-blue-800"
                 >
                   Profile
+                </Link>
+              )}
+              {user.role === 'recruiter' && (
+                <Link 
+                  to="/recruiter/shortlisted" 
+                  className="px-4 py-2 bg-blue-700 rounded hover:bg-blue-800"
+                >
+                  Shortlisted
                 </Link>
               )}
               <button 
