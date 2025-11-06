@@ -1,17 +1,18 @@
 // App.js
-import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import Navbar from './components/Navbar';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import VerifyOTP from './pages/VerifyOTP';
-import CandidateDashboard from './pages/CandidateDashboard';
-import RecruiterDashboard from './pages/RecruiterDashboard';
-import CandidateProfile from './pages/CandidateProfile';
-import JobList from './pages/JobList';
-import JobDetails from './pages/JobDetails';
 import ApplyJob from './pages/ApplyJob';
+import CandidateDashboard from './pages/CandidateDashboard';
+import CandidateProfile from './pages/CandidateProfile';
+import JobDetails from './pages/JobDetails';
+import JobList from './pages/JobList';
+import Login from './pages/Login';
 import PostJob from './pages/PostJob';
+import RecruiterDashboard from './pages/RecruiterDashboard';
+import Register from './pages/Register';
+import ShortlistedCandidates from './pages/ShortlistedCandidates';
+import VerifyOTP from './pages/VerifyOTP';
 
 function App() {
   const [user, setUser] = useState(null);
@@ -77,6 +78,9 @@ function App() {
           } />
           <Route path="/recruiter/post-job" element={
             user && user.role === 'recruiter' ? <PostJob user={user} /> : <Navigate to="/login" />
+          } />
+          <Route path="/recruiter/shortlisted" element={
+            user && user.role === 'recruiter' ? <ShortlistedCandidates user={user} /> : <Navigate to="/login" />
           } />
         </Routes>
       </div>
