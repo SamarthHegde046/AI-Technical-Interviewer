@@ -4,7 +4,14 @@ const router = express.Router();
 const axios = require('axios');
 const Application = require('../models/Application');
 const Job = require('../models/Job');
+const User = require('../models/User');
+const ShortlistedCandidate = require('../models/ShortlistedCandidate');
 const { auth, isCandidate, isRecruiter } = require('../middleware/auth');
+
+// Utility function to validate ObjectId
+const isValidObjectId = (id) => {
+  return id && id !== 'null' && id !== 'undefined' && /^[0-9a-fA-F]{24}$/.test(id);
+};
 
 // AI Detection API endpoint
 const AI_DETECTOR_API = 'https://codedetector-4.onrender.com/api/analyze-repository';
@@ -173,7 +180,14 @@ router.get('/my-applications', auth, isCandidate, async (req, res) => {
 // Get applications for a job (recruiter only)
 router.get('/job/:jobId', auth, isRecruiter, async (req, res) => {
   try {
-    const job = await Job.findById(req.params.jobId);
+    const jobId = req.params.jobId;
+    
+    // Validate ObjectId format
+    if (!isValidObjectId(jobId)) {
+      return res.status(400).json({ message: 'Invalid job ID format' });
+    }
+    
+    const job = await Job.findById(jobId);
     
     if (!job) {
       return res.status(404).json({ message: 'Job not found' });
@@ -183,7 +197,7 @@ router.get('/job/:jobId', auth, isRecruiter, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
-    const applications = await Application.find({ job: req.params.jobId })
+    const applications = await Application.find({ job: jobId })
       .populate('candidate', 'name email')
       .sort({ appliedAt: -1 });
 
@@ -215,8 +229,17 @@ router.get('/recruiter/all', auth, isRecruiter, async (req, res) => {
 // Update application status (recruiter only)
 router.patch('/:id/status', auth, isRecruiter, async (req, res) => {
   try {
+    const applicationId = req.params.id;
+    
+    // Validate ObjectId format
+    if (!isValidObjectId(applicationId)) {
+      return res.status(400).json({ message: 'Invalid application ID format' });
+    }
+    
     const { status } = req.body;
-    const application = await Application.findById(req.params.id).populate('job');
+    const application = await Application.findById(applicationId)
+      .populate('job')
+      .populate('candidate');
 
     if (!application) {
       return res.status(404).json({ message: 'Application not found' });
@@ -226,8 +249,61 @@ router.patch('/:id/status', auth, isRecruiter, async (req, res) => {
       return res.status(403).json({ message: 'Not authorized' });
     }
 
+    const previousStatus = application.status;
     application.status = status;
     await application.save();
+
+    // If status changed to 'shortlisted', create a ShortlistedCandidate record
+    if (status === 'shortlisted' && previousStatus !== 'shortlisted') {
+      try {
+        console.log(`Creating shortlisted record for ${application.candidateName}`);
+        
+        // Check if shortlisted record already exists
+        const existingShortlisted = await ShortlistedCandidate.findOne({
+          candidateId: application.candidate._id,
+          jobId: application.job._id
+        });
+
+        if (!existingShortlisted) {
+          const shortlistedCandidate = new ShortlistedCandidate({
+            candidateId: application.candidate._id,
+            applicationId: application._id,
+            jobId: application.job._id,
+            candidateName: application.candidateName,
+            candidateEmail: application.candidateEmail,
+            phoneNumber: application.phone,
+            companyName: application.job.company,
+            role: application.job.title,
+            recruiterId: req.user.userId,
+            techStack: application.techStack || [],
+            experience: application.experience || 'Not specified'
+          });
+
+          await shortlistedCandidate.save();
+          console.log(`✅ Shortlisted candidate record created for ${application.candidateName}`);
+        } else {
+          console.log(`Shortlisted record already exists for ${application.candidateName}`);
+        }
+      } catch (shortlistError) {
+        console.error('Error creating shortlisted candidate record:', shortlistError);
+        console.error('Shortlist error details:', shortlistError.message);
+        // Don't fail the status update if shortlist creation fails
+      }
+    }
+
+    // If status changed from 'shortlisted' to something else, remove the shortlisted record
+    if (previousStatus === 'shortlisted' && status !== 'shortlisted') {
+      try {
+        await ShortlistedCandidate.findOneAndDelete({
+          candidateId: application.candidate._id,
+          jobId: application.job._id
+        });
+        console.log(`🗑️ Shortlisted candidate record removed for ${application.candidateName}`);
+      } catch (removeError) {
+        console.error('Error removing shortlisted candidate record:', removeError);
+        // Don't fail the status update if removal fails
+      }
+    }
 
     res.json({ message: 'Application status updated', application });
   } catch (err) {
@@ -239,7 +315,14 @@ router.patch('/:id/status', auth, isRecruiter, async (req, res) => {
 // Get single application details
 router.get('/:id', auth, async (req, res) => {
   try {
-    const application = await Application.findById(req.params.id)
+    const applicationId = req.params.id;
+    
+    // Validate ObjectId format
+    if (!isValidObjectId(applicationId)) {
+      return res.status(400).json({ message: 'Invalid application ID format' });
+    }
+    
+    const application = await Application.findById(applicationId)
       .populate('job')
       .populate('candidate', 'name email');
 
@@ -265,7 +348,14 @@ router.get('/:id', auth, async (req, res) => {
 // Trigger AI analysis manually (recruiter only)
 router.post('/:id/analyze-project/:projectIndex', auth, isRecruiter, async (req, res) => {
   try {
-    const application = await Application.findById(req.params.id).populate('job');
+    const applicationId = req.params.id;
+    
+    // Validate ObjectId format
+    if (!isValidObjectId(applicationId)) {
+      return res.status(400).json({ message: 'Invalid application ID format' });
+    }
+    
+    const application = await Application.findById(applicationId).populate('job');
     
     if (!application) {
       return res.status(404).json({ message: 'Application not found' });
