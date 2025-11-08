@@ -41,12 +41,12 @@ app.post('/api/ai-caller/make-call', async (req, res) => {
     
     console.log(`Proxying AI call request for candidate: ${candidate_id}`);
     
-    // Use the correct endpoint from your FastAPI service
     const endpoint = '/make-actual-call';
     
     console.log(`Making AI call request to: ${aiCallerUrl}${endpoint}`);
     console.log(`Request payload:`, { candidate_id });
     
+    // Increased timeout and better configuration
     const response = await axios.post(`${aiCallerUrl}${endpoint}`, {
       candidate_id: candidate_id
     }, {
@@ -54,33 +54,54 @@ app.post('/api/ai-caller/make-call', async (req, res) => {
         'Content-Type': 'application/json',
         'Accept': 'application/json'
       },
-      timeout: 30000 // 30 second timeout for AI calls
+      timeout: 60000, // Increased to 60 seconds
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
     });
 
     console.log('AI Caller Response:', response.data);
     
-    // Forward the response from AI caller service
     res.json(response.data);
     
   } catch (error) {
     console.error('AI Caller Proxy Error:', error);
     
     if (error.response) {
-      // AI caller service responded with an error
-      res.status(error.response.status).json(error.response.data);
+      // Forward the exact error response from AI service
+      res.status(error.response.status).json({
+        status: 'error',
+        message: error.response.data?.message || 'AI service error',
+        error: error.response.data?.error || 'Unknown error',
+        details: error.response.data
+      });
     } else if (error.code === 'ECONNABORTED') {
-      // Timeout error
       res.status(504).json({
         status: 'error',
-        message: 'AI caller service timeout - please try again',
-        error: 'Request timeout'
+        message: 'AI caller service is taking longer than expected. The call may still be processing in the background.',
+        error: 'Request timeout',
+        suggestion: 'Please wait a moment and check the candidate status, or try again.'
+      });
+    } else if (error.code === 'ECONNREFUSED') {
+      res.status(503).json({
+        status: 'error',
+        message: 'AI caller service is currently unavailable',
+        error: 'Service unavailable',
+        suggestion: 'Please try again in a few minutes.'
+      });
+    } else if (error.code === 'ENOTFOUND') {
+      res.status(503).json({
+        status: 'error',
+        message: 'Cannot reach AI caller service',
+        error: 'DNS resolution failed',
+        suggestion: 'Please check your network connection or try again later.'
       });
     } else {
-      // Network or other error
       res.status(500).json({
         status: 'error',
         message: 'Failed to connect to AI caller service',
-        error: error.message
+        error: error.message,
+        code: error.code,
+        suggestion: 'Please try again or contact support if the issue persists.'
       });
     }
   }
