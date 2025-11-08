@@ -5,7 +5,6 @@ const axios = require('axios');
 const Application = require('../models/Application');
 const Job = require('../models/Job');
 const User = require('../models/User');
-const ShortlistedCandidate = require('../models/ShortlistedCandidate');
 const { auth, isCandidate, isRecruiter } = require('../middleware/auth');
 
 // Utility function to validate ObjectId
@@ -253,12 +252,12 @@ router.patch('/:id/status', auth, isRecruiter, async (req, res) => {
     application.status = status;
     await application.save();
 
-    // If status changed to 'shortlisted', create a ShortlistedCandidate record
+    // If status is changed to 'shortlisted', create a shortlisted candidate record
     if (status === 'shortlisted' && previousStatus !== 'shortlisted') {
+      const ShortlistedCandidate = require('../models/ShortlistedCandidate');
+      
       try {
-        console.log(`Creating shortlisted record for ${application.candidateName}`);
-        
-        // Check if shortlisted record already exists
+        // Check if shortlisted candidate already exists
         const existingShortlisted = await ShortlistedCandidate.findOne({
           candidateId: application.candidate._id,
           jobId: application.job._id
@@ -276,31 +275,31 @@ router.patch('/:id/status', auth, isRecruiter, async (req, res) => {
             role: application.job.title,
             recruiterId: req.user.userId,
             techStack: application.techStack || [],
-            experience: application.experience || 'Not specified'
+            experience: application.experience || '',
+            interviewStatus: 'pending'
           });
 
           await shortlistedCandidate.save();
-          console.log(`✅ Shortlisted candidate record created for ${application.candidateName}`);
-        } else {
-          console.log(`Shortlisted record already exists for ${application.candidateName}`);
+          console.log(`Created shortlisted candidate record for ${application.candidateName}`);
         }
       } catch (shortlistError) {
-        console.error('Error creating shortlisted candidate record:', shortlistError);
-        console.error('Shortlist error details:', shortlistError.message);
+        console.error('Error creating shortlisted candidate:', shortlistError);
         // Don't fail the status update if shortlist creation fails
       }
     }
-
-    // If status changed from 'shortlisted' to something else, remove the shortlisted record
+    
+    // If status is changed from 'shortlisted' to something else, remove from shortlisted
     if (previousStatus === 'shortlisted' && status !== 'shortlisted') {
+      const ShortlistedCandidate = require('../models/ShortlistedCandidate');
+      
       try {
-        await ShortlistedCandidate.findOneAndDelete({
+        await ShortlistedCandidate.deleteOne({
           candidateId: application.candidate._id,
           jobId: application.job._id
         });
-        console.log(`🗑️ Shortlisted candidate record removed for ${application.candidateName}`);
+        console.log(`Removed shortlisted candidate record for ${application.candidateName}`);
       } catch (removeError) {
-        console.error('Error removing shortlisted candidate record:', removeError);
+        console.error('Error removing shortlisted candidate:', removeError);
         // Don't fail the status update if removal fails
       }
     }
