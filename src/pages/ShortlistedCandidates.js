@@ -1,4 +1,3 @@
-// pages/ShortlistedCandidates.js
 import { useEffect, useState } from 'react';
 import { shortlistedAPI } from '../utils/api';
 
@@ -7,10 +6,9 @@ const ShortlistedCandidates = () => {
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState({ type: '', text: '' });
   const [callingCandidate, setCallingCandidate] = useState(null);
-
+  const [callTimeout, setCallTimeout] = useState(0);
 
   useEffect(() => {
-    // Check if user is authenticated
     const token = localStorage.getItem('token');
     const user = localStorage.getItem('user');
     
@@ -80,51 +78,66 @@ const ShortlistedCandidates = () => {
     }
   };
 
-  const testAICallerConnection = async () => {
+  const handleMigration = async () => {
     try {
-      setMessage({ type: 'info', text: 'Testing AI caller service connection...' });
+      setLoading(true);
+      setMessage({ type: 'info', text: 'Migrating existing shortlisted applications...' });
       
-      const backendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://ai-technical-interviewer.onrender.com/api'
-        : 'http://localhost:5000/api';
-
-      const response = await fetch(`${backendUrl}/ai-caller/make-call`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-        body: JSON.stringify({
-          candidate_id: 'test-candidate-id'
-        })
-      });
-
-      const result = await response.json();
+      const response = await shortlistedAPI.migrateExisting();
       
-      if (result.status === 'error' && result.message === 'candidate_id is required') {
-        setMessage({ type: 'success', text: 'AI caller service proxy is working! ✅' });
-      } else if (result.status === 'error') {
-        setMessage({ type: 'warning', text: `AI service responded: ${result.message}` });
+      if (response.data.migratedCount > 0) {
+        setMessage({ 
+          type: 'success', 
+          text: `Successfully migrated ${response.data.migratedCount} shortlisted applications! ${response.data.skippedCount > 0 ? `(${response.data.skippedCount} already existed)` : ''}` 
+        });
+        fetchShortlistedCandidates();
+      } else if (response.data.totalFound === 0) {
+        setMessage({ 
+          type: 'info', 
+          text: 'No shortlisted applications found to migrate. Mark some applications as "shortlisted" in your dashboard first.' 
+        });
       } else {
-        setMessage({ type: 'success', text: 'AI caller service is responding! ✅' });
+        setMessage({ 
+          type: 'info', 
+          text: `All ${response.data.totalFound} shortlisted applications were already migrated.` 
+        });
       }
     } catch (err) {
+      console.error('Migration error:', err);
       setMessage({ 
         type: 'error', 
-        text: `AI service test failed: ${err.message}. Check console for details.` 
+        text: 'Failed to migrate existing applications. Please try again.' 
       });
-      console.error('AI Caller Test Error:', err);
+    } finally {
+      setLoading(false);
     }
   };
 
-
-
-  const handleStartInterviewCall = async (candidate) => {
+  const handleStartInterviewCall = async (candidate, retryCount = 0) => {
+    const maxRetries = 2;
+    let timerInterval = null;
+    
     try {
       setCallingCandidate(candidate._id);
-      setMessage({ type: 'info', text: `Initiating AI interview call for ${candidate.candidateName}...` });
+      setCallTimeout(0);
       
-      // First try using the backend proxy to avoid CORS issues
+      // Start countdown timer
+      timerInterval = setInterval(() => {
+        setCallTimeout(prev => prev + 1);
+      }, 1000);
+      
+      if (retryCount === 0) {
+        setMessage({ 
+          type: 'info', 
+          text: `Initiating AI interview call for ${candidate.candidateName}... This may take up to 60 seconds.` 
+        });
+      } else {
+        setMessage({ 
+          type: 'info', 
+          text: `Retrying AI interview call for ${candidate.candidateName}... (Attempt ${retryCount + 1}/${maxRetries + 1})` 
+        });
+      }
+      
       const backendUrl = process.env.NODE_ENV === 'production' 
         ? 'https://ai-technical-interviewer.onrender.com/api'
         : 'http://localhost:5000/api';
@@ -132,7 +145,10 @@ const ShortlistedCandidates = () => {
       let aiCallResponse;
       
       try {
-        // Primary method: Use backend proxy
+        // Create an AbortController for timeout handling
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 65000); // 65 second timeout
+        
         aiCallResponse = await fetch(`${backendUrl}/ai-caller/make-call`, {
           method: 'POST',
           headers: {
@@ -142,13 +158,25 @@ const ShortlistedCandidates = () => {
           },
           body: JSON.stringify({
             candidate_id: candidate._id
-          })
+          }),
+          signal: controller.signal
         });
-      } catch (proxyError) {
-        console.warn('Backend proxy failed, trying direct call:', proxyError);
         
-        // Fallback method: Direct call to AI service (may fail due to CORS)
+        clearTimeout(timeoutId);
+      } catch (proxyError) {
+        console.warn('Backend proxy failed:', proxyError);
+        
+        // If it's a timeout and we haven't exceeded retries, try again
+        if ((proxyError.name === 'AbortError' || proxyError.message.includes('timeout')) && retryCount < maxRetries) {
+          console.log(`Timeout occurred, retrying... (${retryCount + 1}/${maxRetries})`);
+          return handleStartInterviewCall(candidate, retryCount + 1);
+        }
+        
+        // Try direct call as fallback
         const aiCallerUrl = process.env.REACT_APP_AI_CALLER_URL || 'https://ai-interview-caller.vercel.app';
+        
+        const directController = new AbortController();
+        const directTimeoutId = setTimeout(() => directController.abort(), 65000);
         
         aiCallResponse = await fetch(`${aiCallerUrl}/make-actual-call`, {
           method: 'POST',
@@ -159,127 +187,236 @@ const ShortlistedCandidates = () => {
           },
           body: JSON.stringify({
             candidate_id: candidate._id
-          })
+          }),
+          signal: directController.signal
         });
+        
+        clearTimeout(directTimeoutId);
       }
 
       const aiCallResult = await aiCallResponse.json();
       
       console.log('AI call result:', aiCallResult);
 
-      // Handle error responses
       if (!aiCallResponse.ok || aiCallResult.status === 'error') {
-        throw new Error(aiCallResult.message || `AI call failed with status: ${aiCallResponse.status}`);
+        // Handle specific error cases with better messaging
+        if (aiCallResponse.status === 504 || aiCallResult.error === 'Request timeout') {
+          if (retryCount < maxRetries) {
+            console.log(`Request timed out, retrying... (${retryCount + 1}/${maxRetries})`);
+            await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds before retry
+            return handleStartInterviewCall(candidate, retryCount + 1);
+          } else {
+            throw new Error(`Service timeout after ${maxRetries + 1} attempts. ${aiCallResult.suggestion || 'Please try again later.'}`);
+          }
+        }
+        
+        throw new Error(aiCallResult.message || aiCallResult.suggestion || `AI call failed with status: ${aiCallResponse.status}`);
       }
 
-      // Handle successful response
-      await updateInterviewStatus(candidate._id, 'scheduled', {
-        scheduledInterviewDate: new Date().toISOString(),
-        notes: 'AI interview call initiated successfully',
-        aiInterviewSessionId: aiCallResult.call_sid || aiCallResult.session_id || Date.now().toString()
+      // Update status to "calling" instead of "scheduled"
+      await updateInterviewStatus(candidate._id, 'calling', {
+        notes: `AI interview call initiated on ${new Date().toLocaleString()}`,
+        aiInterviewSessionId: aiCallResult.call_sid || aiCallResult.session_id || Date.now().toString(),
+        lastCallDate: new Date().toISOString()
       });
 
       setMessage({ 
         type: 'success', 
-        text: `AI interview call initiated successfully for ${candidate.candidateName}! Call ID: ${aiCallResult.call_sid || aiCallResult.session_id}` 
+        text: `📞 AI interview call initiated for ${candidate.candidateName}! The system will update the status based on candidate response. Call ID: ${aiCallResult.call_sid || aiCallResult.session_id}` 
       });
+
+      // Start polling for status updates every 30 seconds
+      const pollInterval = setInterval(async () => {
+        try {
+          const updatedCandidate = await shortlistedAPI.getShortlistedById(candidate._id);
+          const currentCandidate = shortlistedCandidates.find(c => c._id === candidate._id);
+          
+          if (updatedCandidate.data && currentCandidate && 
+              updatedCandidate.data.interviewStatus !== currentCandidate.interviewStatus) {
+            
+            // Update the local state
+            setShortlistedCandidates(prev => 
+              prev.map(c => c._id === candidate._id ? updatedCandidate.data : c)
+            );
+            
+            // Show status update message
+            setMessage({ 
+              type: 'info', 
+              text: `📋 Status updated for ${candidate.candidateName}: ${updatedCandidate.data.interviewStatus}` 
+            });
+            
+            // Stop polling if status is no longer "calling"
+            if (updatedCandidate.data.interviewStatus !== 'calling') {
+              clearInterval(pollInterval);
+            }
+          }
+        } catch (error) {
+          console.error('Error polling status:', error);
+        }
+      }, 30000); // Poll every 30 seconds
+
+      // Stop polling after 10 minutes max
+      setTimeout(() => clearInterval(pollInterval), 600000);
     } catch (err) {
       console.error('Error initiating AI interview call:', err);
       
       let errorMessage = `Failed to initiate AI interview for ${candidate.candidateName}`;
+      let suggestion = '';
       
-      if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
-        errorMessage += ': Network connection failed. Please check your internet connection and try again.';
+      if (err.name === 'AbortError') {
+        errorMessage += ': Request timed out after 65 seconds.';
+        suggestion = ' The AI service may be experiencing high load. Please try again in a few minutes.';
+      } else if (err.name === 'TypeError' && err.message.includes('Failed to fetch')) {
+        errorMessage += ': Network connection failed.';
+        suggestion = ' Please check your internet connection and try again.';
       } else if (err.message.includes('CORS')) {
-        errorMessage += ': CORS policy error. Using backend proxy should resolve this issue.';
+        errorMessage += ': Cross-origin request blocked.';
+        suggestion = ' This should be handled by the backend proxy.';
       } else if (err.message.includes('timeout')) {
-        errorMessage += ': Request timeout. The AI caller service may be experiencing high load.';
+        errorMessage += ': Service timeout.';
+        suggestion = ' The AI caller service may be busy. Please try again in a few minutes.';
       } else if (err.message.includes('404')) {
-        errorMessage += ': AI caller service endpoint not found. Please check service availability.';
+        errorMessage += ': Service endpoint not found.';
+        suggestion = ' Please contact support.';
+      } else if (err.message.includes('503') || err.message.includes('unavailable')) {
+        errorMessage += ': Service temporarily unavailable.';
+        suggestion = ' Please try again in a few minutes.';
       } else if (err.message.includes('500')) {
-        errorMessage += ': AI caller service internal error. Please try again later.';
+        errorMessage += ': Internal service error.';
+        suggestion = ' Please try again later or contact support.';
       } else {
         errorMessage += `: ${err.message}`;
       }
       
       setMessage({ 
         type: 'error', 
-        text: errorMessage
+        text: errorMessage + suggestion
       });
     } finally {
+      if (timerInterval) {
+        clearInterval(timerInterval);
+      }
       setCallingCandidate(null);
+      setCallTimeout(0);
     }
   };
 
-
-
   const getStatusColor = (status) => {
     switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'scheduled': return 'bg-blue-100 text-blue-800';
-      case 'completed': return 'bg-green-100 text-green-800';
+      case 'shortlisted': return 'bg-blue-100 text-blue-800';
+      case 'calling': return 'bg-yellow-100 text-yellow-800';
+      case 'scheduled': return 'bg-green-100 text-green-800';
+      case 'call_completed': return 'bg-indigo-100 text-indigo-800';
+      case 'completed': return 'bg-purple-100 text-purple-800';
+      case 'declined': return 'bg-orange-100 text-orange-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="text-center">Loading shortlisted candidates...</div>
+      <div className="min-h-screen bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="flex items-center justify-center h-64">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Shortlisted Candidates</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={testAICallerConnection}
-            className="bg-orange-600 text-white px-4 py-2 rounded hover:bg-orange-700 text-sm"
-          >
-            Test AI Service
-          </button>
-          <button
-            onClick={fetchShortlistedCandidates}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-          >
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {message.text && (
-        <div className={`mb-6 p-4 rounded ${
-          message.type === 'success' 
-            ? 'bg-green-100 border border-green-400 text-green-700' 
-            : 'bg-red-100 border border-red-400 text-red-700'
-        }`}>
-          {message.text}
-        </div>
-      )}
-
-      {shortlistedCandidates.length === 0 && !message.text ? (
-        <div className="text-center py-12">
-          <div className="max-w-2xl mx-auto">
-            <p className="text-xl text-gray-600 mb-4">No shortlisted candidates available.</p>
-            <div className="bg-blue-50 p-6 rounded-lg text-left">
-              <h3 className="font-semibold text-blue-800 mb-3">How the shortlisting feature works:</h3>
-              <ol className="list-decimal list-inside space-y-2 text-blue-700">
-                <li>Recruiters review job applications</li>
-                <li>Change promising application status to "shortlisted"</li>
-                <li>Shortlisted candidates appear here for AI interview scheduling</li>
-                <li>AI system can access structured candidate data for automated interviews</li>
-              </ol>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="bg-white rounded-lg shadow border p-6 mb-8">
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Shortlisted Candidates</h1>
+              <p className="text-gray-600 mt-1">Manage candidates you've shortlisted for AI interviews</p>
             </div>
+            <button
+              onClick={fetchShortlistedCandidates}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+            >
+              Refresh
+            </button>
           </div>
         </div>
-      ) : (
-        <div className="grid gap-6">
-          {shortlistedCandidates.map((candidate) => (
-            <div key={candidate._id} className="bg-white rounded-lg shadow-md p-6 border">
+
+        {/* Message Display */}
+        {message.text && (
+          <div className={`mb-6 p-4 rounded-lg border ${
+            message.type === 'success' 
+              ? 'bg-green-50 border-green-200 text-green-700' 
+              : message.type === 'info' 
+              ? 'bg-blue-50 border-blue-200 text-blue-700'
+              : 'bg-red-50 border-red-200 text-red-700'
+          }`}>
+            {message.text}
+          </div>
+        )}
+
+        {/* Content */}
+        {shortlistedCandidates.length === 0 && !message.text ? (
+          <div className="bg-white rounded-lg shadow border p-8">
+            <div className="text-center">
+              <svg className="w-16 h-16 text-gray-300 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">No Shortlisted Candidates</h3>
+              <p className="text-gray-600 mb-6">Start by shortlisting promising applications from your dashboard.</p>
+              
+              <div className="flex flex-col sm:flex-row gap-3 justify-center mb-6">
+                <button
+                  onClick={handleMigration}
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                  disabled={loading}
+                >
+                  {loading ? 'Checking...' : 'Sync Existing Applications'}
+                </button>
+                <button
+                  onClick={async () => {
+                    try {
+                      const response = await shortlistedAPI.debug();
+                      console.log('Debug info:', response.data);
+                      setMessage({ 
+                        type: 'info', 
+                        text: `Debug: Found ${response.data.totalApplications} total applications, ${response.data.shortlistedApplications.length} shortlisted applications, ${response.data.shortlistedCandidatesCollection} in shortlisted collection. Check console for details.` 
+                      });
+                    } catch (err) {
+                      console.error('Debug error:', err);
+                      setMessage({ type: 'error', text: 'Debug failed. Check console.' });
+                    }
+                  }}
+                  className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 font-medium text-sm"
+                  disabled={loading}
+                >
+                  Debug Info
+                </button>
+              </div>
+              
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left max-w-md mx-auto">
+                <h4 className="font-medium text-blue-900 mb-2">How it works:</h4>
+                <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
+                  <li>Review applications in your dashboard</li>
+                  <li>Change status to "shortlisted" for promising candidates</li>
+                  <li>Schedule AI interviews from this page</li>
+                </ol>
+                <div className="mt-3 pt-3 border-t border-blue-200">
+                  <p className="text-xs text-blue-700">
+                    💡 Click "Sync Existing Applications" if you already have shortlisted applications
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {shortlistedCandidates.map((candidate) => (
+            <div key={candidate._id} className="bg-white rounded-lg shadow border p-6">
               <div className="flex justify-between items-start mb-4">
                 <div>
                   <h3 className="text-xl font-bold text-blue-600">{candidate.candidateName}</h3>
@@ -293,71 +430,107 @@ const ShortlistedCandidates = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <p className="font-semibold text-gray-700">Position:</p>
-                  <p>{candidate.role} at {candidate.companyName}</p>
+                  <p className="text-sm font-medium text-gray-500">Position</p>
+                  <p className="text-gray-900">{candidate.role} at {candidate.companyName}</p>
                 </div>
                 <div>
-                  <p className="font-semibold text-gray-700">Experience:</p>
-                  <p>{candidate.experience}</p>
+                  <p className="text-sm font-medium text-gray-500">Experience</p>
+                  <p className="text-gray-900">{candidate.experience}</p>
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-700">Tech Stack:</p>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {candidate.techStack.map((tech, index) => (
-                      <span key={index} className="bg-gray-200 text-gray-700 px-2 py-1 rounded text-sm">
+                <div className="md:col-span-2">
+                  <p className="text-sm font-medium text-gray-500 mb-2">Tech Stack</p>
+                  <div className="flex flex-wrap gap-1">
+                    {candidate.techStack?.map((tech, index) => (
+                      <span key={index} className="bg-blue-100 text-blue-800 px-2 py-1 rounded text-xs font-medium">
                         {tech}
                       </span>
                     ))}
                   </div>
                 </div>
-                <div>
-                  <p className="font-semibold text-gray-700">Shortlisted:</p>
-                  <p>{new Date(candidate.shortlistedAt).toLocaleDateString()}</p>
-                </div>
               </div>
 
-              {/* Interview Status Information */}
-              <div className="mb-4 p-3 bg-gray-50 rounded">
-                <p className="font-semibold text-gray-800">Interview Status:</p>
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`px-2 py-1 rounded text-sm ${getStatusColor(candidate.interviewStatus)}`}>
+              <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-sm font-medium text-gray-500">Interview Status</p>
+                  <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(candidate.interviewStatus)}`}>
                     {candidate.interviewStatus.charAt(0).toUpperCase() + candidate.interviewStatus.slice(1)}
                   </span>
-                  {candidate.scheduledInterviewDate && (
-                    <span className="text-sm text-gray-600">
-                      Scheduled: {new Date(candidate.scheduledInterviewDate).toLocaleString()}
-                    </span>
-                  )}
                 </div>
+                {candidate.scheduledInterviewDate && (
+                  <div className="text-xs text-gray-600 mb-1">
+                    <span className="font-medium">Scheduled:</span> {new Date(candidate.scheduledInterviewDate).toLocaleString()}
+                  </div>
+                )}
                 {candidate.notes && (
-                  <p className="text-gray-600 mt-2 text-sm">Notes: {candidate.notes}</p>
+                  <div className="text-xs text-gray-600 mb-1">
+                    <span className="font-medium">Notes:</span> {candidate.notes}
+                  </div>
                 )}
                 {candidate.aiInterviewSessionId && (
-                  <p className="text-gray-500 mt-1 text-xs">Session ID: {candidate.aiInterviewSessionId}</p>
+                  <div className="text-xs text-gray-500">
+                    <span className="font-medium">Session ID:</span> {candidate.aiInterviewSessionId}
+                  </div>
                 )}
+                <div className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-200">
+                  Shortlisted: {new Date(candidate.shortlistedAt).toLocaleDateString()}
+                </div>
               </div>
 
               <div className="flex flex-wrap gap-2">
-                {candidate.interviewStatus === 'pending' && (
-                  <button
-                    onClick={() => handleStartInterviewCall(candidate)}
-                    disabled={callingCandidate === candidate._id}
-                    className={`px-4 py-2 rounded flex items-center gap-2 ${
-                      callingCandidate === candidate._id
-                        ? 'bg-gray-400 text-white cursor-not-allowed'
-                        : 'bg-green-600 text-white hover:bg-green-700'
-                    }`}
-                  >
-                    {callingCandidate === candidate._id ? (
-                      <>
-                        <span className="animate-spin">⏳</span> Calling...
-                      </>
-                    ) : (
-                      <>
-                        📞 Start AI Interview Call
-                      </>
+                {(candidate.interviewStatus === 'pending' || candidate.interviewStatus === 'shortlisted') && (
+                  <>
+                    <button
+                      onClick={() => handleStartInterviewCall(candidate)}
+                      disabled={callingCandidate === candidate._id}
+                      className={`px-4 py-2 rounded flex items-center gap-2 ${
+                        callingCandidate === candidate._id
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-green-600 text-white hover:bg-green-700'
+                      }`}
+                    >
+                      {callingCandidate === candidate._id ? (
+                        <>
+                          <span className="animate-spin">⏳</span> 
+                          Calling... {callTimeout > 0 && `(${callTimeout}s)`}
+                        </>
+                      ) : (
+                        <>
+                          📞 Start AI Interview Call
+                        </>
+                      )}
+                    </button>
+                    {callingCandidate === candidate._id && callTimeout > 30 && (
+                      <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center">
+                        ⚠️ Call taking longer than expected. AI service may be busy.
+                      </div>
                     )}
-                  </button>
+                  </>
+                )}
+                
+                {candidate.interviewStatus === 'calling' && (
+                  <div className="flex items-center gap-2">
+                    <span className="animate-pulse text-yellow-600">📞 Call in progress...</span>
+                    <span className="text-xs text-gray-500">Waiting for candidate response</span>
+                  </div>
+                )}
+                
+                {candidate.interviewStatus === 'call_completed' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-indigo-600">✅ Call completed</span>
+                    <span className="text-xs text-gray-500">Awaiting interview scheduling</span>
+                  </div>
+                )}
+                
+                {candidate.interviewStatus === 'declined' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-orange-600">❌ Candidate declined</span>
+                    <button
+                      onClick={() => handleStartInterviewCall(candidate)}
+                      className="bg-blue-600 text-white px-3 py-1 rounded text-sm hover:bg-blue-700"
+                    >
+                      Try Again
+                    </button>
+                  </div>
                 )}
                 
                 {candidate.interviewStatus === 'scheduled' && (
@@ -388,12 +561,9 @@ const ShortlistedCandidates = () => {
               </div>
             </div>
           ))}
-        </div>
-      )}
-
-
-
-
+          </div>
+        )}
+      </div>
     </div>
   );
 };

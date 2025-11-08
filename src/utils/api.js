@@ -35,14 +35,7 @@ export const jobAPI = {
   deleteJob: (id) => api.delete(`/jobs/${id}`),
 };
 
-export const shortlistedAPI = {
-  getAllShortlisted: () => api.get('/shortlisted'),
-  getCandidate: (id) => api.get(`/shortlisted/${id}`),
-  getCandidateAIFormat: (id) => api.get(`/shortlisted/${id}/ai-format`),
-  updateInterviewStatus: (id, data) => api.patch(`/shortlisted/${id}/interview-status`, data),
-  exportAIData: () => api.get('/shortlisted/export/ai-scheduling-data'),
-  getPendingCandidates: () => api.get('/shortlisted/pending-interviews'),
-};
+
 
 export const applicationAPI = {
   submitApplication: (data) => api.post('/applications', data),
@@ -52,6 +45,17 @@ export const applicationAPI = {
   updateStatus: (id, status) => api.patch(`/applications/${id}/status`, { status }),
   getApplication: (id) => api.get(`/applications/${id}`),
   analyzeProject: (applicationId, projectIndex) => api.post(`/applications/${applicationId}/analyze-project/${projectIndex}`),
+};
+
+export const shortlistedAPI = {
+  getAllShortlisted: () => api.get('/shortlisted'),
+  getShortlistedById: (id) => api.get(`/shortlisted/${id}`),
+  getJobShortlisted: (jobId) => api.get(`/shortlisted/job/${jobId}`),
+  updateInterviewStatus: (id, data) => api.patch(`/shortlisted/${id}/interview-status`, data),
+  getAiFormat: (id) => api.get(`/shortlisted/${id}/ai-format`),
+  deleteShortlisted: (id) => api.delete(`/shortlisted/${id}`),
+  migrateExisting: () => api.post('/shortlisted/migrate'),
+  debug: () => api.get('/shortlisted/debug'),
 };
 
 export default api;

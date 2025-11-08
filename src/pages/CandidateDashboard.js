@@ -1,5 +1,5 @@
 // pages/CandidateDashboard.js
-import React, { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { applicationAPI, authAPI } from '../utils/api';
 
@@ -98,7 +98,7 @@ const CandidateDashboard = ({ user }) => {
     const colors = {
       pending: 'bg-yellow-100 text-yellow-800',
       reviewed: 'bg-blue-100 text-blue-800',
-      shortlisted: 'bg-green-100 text-green-800',
+
       rejected: 'bg-red-100 text-red-800'
     };
     return colors[status] || 'bg-gray-100 text-gray-800';
