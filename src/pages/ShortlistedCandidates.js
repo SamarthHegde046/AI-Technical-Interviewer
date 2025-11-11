@@ -327,10 +327,7 @@ const ShortlistedCandidates = () => {
     }
   };
 
-  const checkIfInterviewScheduled = async (candidateId) => {
-    const scheduledInterview = await fetchScheduledInterview(candidateId);
-    return scheduledInterview && scheduledInterview.status === 'scheduled';
-  };
+
 
   const handleSendSessionEmail = async (candidate) => {
     try {
@@ -684,12 +681,7 @@ const ShortlistedCandidates = () => {
                       )}
                     </button>
                     
-                    {/* Show scheduled interview details */}
-                    {isInterviewScheduled(candidate._id) && (
-                      <div className="text-xs text-green-600 mt-1">
-                        ✅ Scheduled: {getScheduledInterview(candidate._id)?.scheduledDate} at {getScheduledInterview(candidate._id)?.scheduledTime}
-                      </div>
-                    )}
+
                     {callingCandidate === candidate._id && callTimeout > 30 && (
                       <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center">
                         ⚠️ Call taking longer than expected. AI service may be busy.
