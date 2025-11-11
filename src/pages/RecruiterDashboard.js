@@ -371,6 +371,7 @@ const RecruiterDashboard = ({ user }) => {
             />
           </div>
         </div>
+        
 
         {/* Content Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -397,7 +398,7 @@ const RecruiterDashboard = ({ user }) => {
                   </Link>
                 </div>
               ) : (
-                <div className="space-y-4 max-h-96 overflow-y-auto">
+                <div className="space-y-4max-h-96 overflow-y-auto">
                   {jobs.map((job) => (
                     <div
                       key={job._id}
@@ -956,6 +957,181 @@ const RecruiterDashboard = ({ user }) => {
                 Close
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {showAIDetailsModal && selectedAIAnalysis && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-y-auto p-6">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <h2 className="text-2xl font-bold">AI Code Detection Analysis</h2>
+                <p className="text-gray-600">{selectedAIAnalysis.projectName}</p>
+              </div>
+              <button
+                onClick={() => setShowAIDetailsModal(false)}
+                className="text-gray-500 hover:text-gray-700 text-2xl"
+              >
+                ×
+              </button>
+            </div>
+
+            {selectedAIAnalysis.status === 'completed' && selectedAIAnalysis.summary && (
+              <>
+                {/* Summary Cards */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-blue-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Files Analyzed</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {selectedAIAnalysis.summary.files_analyzed}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      of {selectedAIAnalysis.summary.total_files_found} found
+                    </p>
+                  </div>
+                  <div className="bg-red-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">AI Generated</p>
+                    <p className="text-2xl font-bold text-red-600">
+                      {selectedAIAnalysis.summary.ai_percentage.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {selectedAIAnalysis.summary.ai_files} files
+                    </p>
+                  </div>
+                  <div className="bg-green-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Human Written</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      {selectedAIAnalysis.summary.human_percentage.toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {selectedAIAnalysis.summary.human_files} files
+                    </p>
+                  </div>
+                  <div className="bg-purple-50 p-4 rounded-lg">
+                    <p className="text-sm text-gray-600">Avg Confidence</p>
+                    <p className="text-2xl font-bold text-purple-600">
+                      {(selectedAIAnalysis.summary.avg_confidence * 100).toFixed(1)}%
+                    </p>
+                    <p className="text-xs text-gray-500">Detection accuracy</p>
+                  </div>
+                </div>
+
+                {/* Lines Analysis */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+                  <h3 className="font-semibold mb-3">Code Lines Analysis</h3>
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div>
+                      <p className="text-2xl font-bold">{selectedAIAnalysis.summary.total_lines}</p>
+                      <p className="text-sm text-gray-600">Total Lines</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-red-600">{selectedAIAnalysis.summary.total_ai_lines}</p>
+                      <p className="text-sm text-gray-600">AI Lines ({selectedAIAnalysis.summary.ai_lines_percentage.toFixed(1)}%)</p>
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold text-green-600">{selectedAIAnalysis.summary.total_human_lines}</p>
+                      <p className="text-sm text-gray-600">Human Lines ({selectedAIAnalysis.summary.human_lines_percentage.toFixed(1)}%)</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 w-full bg-gray-200 rounded-full h-4 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-red-500 to-red-600 h-full float-left"
+                      style={{ width: `${selectedAIAnalysis.summary.ai_lines_percentage}%` }}
+                    ></div>
+                    <div
+                      className="bg-gradient-to-r from-green-500 to-green-600 h-full float-left"
+                      style={{ width: `${selectedAIAnalysis.summary.human_lines_percentage}%` }}
+                    ></div>
+                  </div>
+                </div>
+
+                {/* File-by-File Analysis */}
+                <div>
+                  <h3 className="font-semibold text-lg mb-3">Detailed File Analysis</h3>
+                  <div className="space-y-2 max-h-96 overflow-y-auto">
+                    {selectedAIAnalysis.files && selectedAIAnalysis.files.map((file, idx) => (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded border-l-4 ${
+                          file.prediction === 'ai'
+                            ? 'bg-red-50 border-red-500'
+                            : 'bg-green-50 border-green-500'
+                        }`}
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <p className="font-mono text-sm font-semibold">{file.file_path}</p>
+                            <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
+                              <div>
+                                <span className="text-gray-600">Prediction:</span>
+                                <span
+                                  className={`ml-1 font-semibold ${
+                                    file.prediction === 'ai' ? 'text-red-600' : 'text-green-600'
+                                  }`}
+                                >
+                                  {file.prediction === 'ai' ? '🤖 AI' : '👨‍💻 Human'}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Confidence:</span>
+                                <span className="ml-1 font-semibold">
+                                  {(file.confidence * 100).toFixed(1)}%
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">Total Lines:</span>
+                                <span className="ml-1 font-semibold">{file.line_count}</span>
+                              </div>
+                              <div>
+                                <span className="text-gray-600">AI/Human:</span>
+                                <span className="ml-1 font-semibold text-red-600">{file.ai_lines}</span>
+                                <span className="mx-1">/</span>
+                                <span className="font-semibold text-green-600">{file.human_lines}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Repository Info */}
+                {selectedAIAnalysis.repository && (
+                  <div className="mt-6 p-4 bg-gray-100 rounded-lg">
+                    <h3 className="font-semibold mb-2">Repository Information</h3>
+                    <p className="text-sm">
+                      <span className="text-gray-600">Owner:</span>{' '}
+                      <span className="font-semibold">{selectedAIAnalysis.repository.owner}</span>
+                    </p>
+                    <p className="text-sm">
+                      <span className="text-gray-600">Repository:</span>{' '}
+                      <span className="font-semibold">{selectedAIAnalysis.repository.name}</span>
+                    </p>
+                    <a
+                      href={selectedAIAnalysis.repository.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 hover:underline text-sm"
+                    >
+                      View Repository →
+                    </a>
+                  </div>
+                )}
+
+                <div className="mt-4 text-xs text-gray-500 text-center">
+                  <p>⚠️ Note: Currently analyzing Python files only. More languages coming soon.</p>
+                  <p>Analysis performed at: {new Date(selectedAIAnalysis.analyzedAt).toLocaleString()}</p>
+                </div>
+              </>
+            )}
+
+            {selectedAIAnalysis.status === 'failed' && (
+              <div className="bg-red-50 border border-red-200 rounded p-4">
+                <p className="text-red-700">❌ Analysis Failed</p>
+                <p className="text-sm text-gray-600 mt-2">{selectedAIAnalysis.error}</p>
+              </div>
+            )}
           </div>
         </div>
       )}
