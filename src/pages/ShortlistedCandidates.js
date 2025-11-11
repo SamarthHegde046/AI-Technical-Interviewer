@@ -139,9 +139,8 @@ const ShortlistedCandidates = () => {
         });
       }
       
-      const backendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://ai-technical-interviewer.onrender.com/api'
-        : 'http://localhost:5000/api';
+      // Temporary fix: Force localhost since production Render deployment has issues
+      const backendUrl = 'http://localhost:3333/api';
       
       let aiCallResponse;
       
@@ -310,9 +309,30 @@ const ShortlistedCandidates = () => {
         text: `Sending session URL to ${candidate.candidateName}...` 
       });
 
-      const backendUrl = process.env.NODE_ENV === 'production' 
-        ? 'https://ai-technical-interviewer.onrender.com/api'
-        : 'http://localhost:5000/api';
+      // FORCE LOCAL BACKEND - HARDCODED TO PREVENT CACHING ISSUES
+      const backendUrl = 'http://localhost:3333/api';
+      
+      // CRITICAL: Verify we're not calling production URL
+      if (backendUrl.includes('onrender.com')) {
+        alert('ERROR: Still using production URL! Check code!');
+        throw new Error('Production URL detected - should use localhost');
+      }
+      
+      // Debug logging to verify URL
+      console.log('🔍 DEBUG: Using backend URL:', backendUrl);
+      console.log('🔍 DEBUG: Full email URL:', `${backendUrl}/email/send-candidate-session`);
+      console.log('🔍 DEBUG: Candidate ID:', candidate._id);
+      console.log('🔍 DEBUG: Timestamp:', new Date().toISOString());
+
+      console.log('🚀 DEBUG: Making POST request...');
+      
+      const requestPayload = {
+        candidateId: candidate._id,
+        recruiterEmail: JSON.parse(localStorage.getItem('user') || '{}').email || 'recruiter@company.com',
+        message: `Interview session URL for ${candidate.role} position at ${candidate.companyName}`
+      };
+      
+      console.log('📤 DEBUG: Request payload:', requestPayload);
 
       const response = await fetch(`${backendUrl}/email/send-candidate-session`, {
         method: 'POST',
@@ -320,14 +340,33 @@ const ShortlistedCandidates = () => {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${localStorage.getItem('token')}`,
         },
-        body: JSON.stringify({
-          candidateId: candidate._id,
-          recruiterEmail: JSON.parse(localStorage.getItem('user') || '{}').email || 'recruiter@company.com',
-          message: `Interview session URL for ${candidate.role} position at ${candidate.companyName}`
-        }),
+        body: JSON.stringify(requestPayload),
       });
 
+      console.log('📥 DEBUG: Response status:', response.status);
+      console.log('📥 DEBUG: Response headers:', Object.fromEntries(response.headers.entries()));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ DEBUG: Error response:', errorText);
+        console.error('❌ DEBUG: Response status:', response.status);
+        console.error('❌ DEBUG: Response URL:', response.url);
+        
+        // Check if it's an HTML error page
+        if (errorText.includes('<!DOCTYPE') || errorText.includes('<html>')) {
+          console.error('🚨 SERVER RETURNED HTML INSTEAD OF JSON!');
+          console.error('🚨 This usually means:');
+          console.error('   - Wrong HTTP method (GET instead of POST)');
+          console.error('   - Wrong URL/endpoint');
+          console.error('   - Server error or crash');
+          throw new Error(`Server returned HTML error page (Status: ${response.status}). Check browser Network tab for details.`);
+        }
+        
+        throw new Error(`HTTP ${response.status}: ${errorText}`);
+      }
+
       const result = await response.json();
+      console.log('✅ DEBUG: Success response:', result);
 
       if (!response.ok || !result.success) {
         throw new Error(result.message || 'Failed to send email');
