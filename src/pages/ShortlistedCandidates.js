@@ -8,6 +8,12 @@ const ShortlistedCandidates = () => {
   const [callingCandidate, setCallingCandidate] = useState(null);
   const [callTimeout, setCallTimeout] = useState(0);
   const [sendingEmail, setSendingEmail] = useState(null);
+  
+  // Interview scheduling states
+  const [schedulingInterview, setSchedulingInterview] = useState(null);
+  const [scheduledInterviews, setScheduledInterviews] = useState(new Map()); // candidateId -> interview details
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+  const [selectedCandidate, setSelectedCandidate] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -301,12 +307,81 @@ const ShortlistedCandidates = () => {
     }
   };
 
+  // Interview Scheduling Functions
+  const handleScheduleInterview = (candidate) => {
+    setSelectedCandidate(candidate);
+    setShowScheduleModal(true);
+  };
+
+  const handleScheduleSubmit = async (scheduleData) => {
+    try {
+      setSchedulingInterview(selectedCandidate._id);
+      
+      // Create interview schedule object
+      const interviewDetails = {
+        candidateId: selectedCandidate._id,
+        candidateName: selectedCandidate.candidateName,
+        candidateEmail: selectedCandidate.candidateEmail,
+        scheduledDate: scheduleData.date,
+        scheduledTime: scheduleData.time,
+        duration: scheduleData.duration || 60, // minutes
+        interviewType: scheduleData.type || 'Technical Interview',
+        notes: scheduleData.notes || '',
+        status: 'scheduled',
+        createdAt: new Date().toISOString()
+      };
+
+      // Store in local state (you can later save to database)
+      setScheduledInterviews(prev => {
+        const newMap = new Map(prev);
+        newMap.set(selectedCandidate._id, interviewDetails);
+        return newMap;
+      });
+
+      setMessage({
+        type: 'success',
+        text: `Interview scheduled successfully for ${selectedCandidate.candidateName} on ${scheduleData.date} at ${scheduleData.time}`
+      });
+
+      setShowScheduleModal(false);
+      setSelectedCandidate(null);
+
+    } catch (error) {
+      console.error('Error scheduling interview:', error);
+      setMessage({
+        type: 'error',
+        text: 'Failed to schedule interview. Please try again.'
+      });
+    } finally {
+      setSchedulingInterview(null);
+    }
+  };
+
+  const isInterviewScheduled = (candidateId) => {
+    return scheduledInterviews.has(candidateId);
+  };
+
+  const getScheduledInterview = (candidateId) => {
+    return scheduledInterviews.get(candidateId);
+  };
+
   const handleSendSessionEmail = async (candidate) => {
+    // Check if interview is scheduled first
+    if (!isInterviewScheduled(candidate._id)) {
+      setMessage({
+        type: 'error',
+        text: 'Please schedule the interview before sending the session URL.'
+      });
+      return;
+    }
+
+    const scheduledInterview = getScheduledInterview(candidate._id);
+
     try {
       setSendingEmail(candidate._id);
       setMessage({ 
         type: 'info', 
-        text: `Sending session URL to ${candidate.candidateName}...` 
+        text: `Sending session URL to ${candidate.candidateName} for scheduled interview...` 
       });
 
       // FORCE LOCAL BACKEND - HARDCODED TO PREVENT CACHING ISSUES
@@ -329,7 +404,14 @@ const ShortlistedCandidates = () => {
       const requestPayload = {
         candidateId: candidate._id,
         recruiterEmail: JSON.parse(localStorage.getItem('user') || '{}').email || 'recruiter@company.com',
-        message: `Interview session URL for ${candidate.role} position at ${candidate.companyName}`
+        message: `Interview session scheduled for ${scheduledInterview.scheduledDate} at ${scheduledInterview.scheduledTime}`,
+        scheduledInterview: {
+          date: scheduledInterview.scheduledDate,
+          time: scheduledInterview.scheduledTime,
+          duration: scheduledInterview.duration,
+          type: scheduledInterview.interviewType,
+          notes: scheduledInterview.notes
+        }
       };
       
       console.log('📤 DEBUG: Request payload:', requestPayload);
@@ -607,26 +689,59 @@ const ShortlistedCandidates = () => {
                         </>
                       )}
                     </button>
-                    <button
-                      onClick={() => handleSendSessionEmail(candidate)}
-                      disabled={sendingEmail === candidate._id}
-                      className={`px-4 py-2 rounded flex items-center gap-2 ${
-                        sendingEmail === candidate._id
-                          ? 'bg-gray-400 text-white cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      {sendingEmail === candidate._id ? (
-                        <>
-                          <span className="animate-spin">⏳</span> 
-                          Sending Email...
-                        </>
-                      ) : (
-                        <>
-                          📧 Send Session URL
-                        </>
-                      )}
-                    </button>
+                    {/* Interview Workflow Buttons */}
+                    {!isInterviewScheduled(candidate._id) ? (
+                      // Step 1: Schedule Interview
+                      <button
+                        onClick={() => handleScheduleInterview(candidate)}
+                        disabled={schedulingInterview === candidate._id}
+                        className={`px-4 py-2 rounded flex items-center gap-2 ${
+                          schedulingInterview === candidate._id
+                            ? 'bg-gray-400 text-white cursor-not-allowed'
+                            : 'bg-green-600 text-white hover:bg-green-700'
+                        }`}
+                      >
+                        {schedulingInterview === candidate._id ? (
+                          <>
+                            <span className="animate-spin">⏳</span> 
+                            Scheduling...
+                          </>
+                        ) : (
+                          <>
+                            📅 Schedule Interview
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      // Step 2: Send Session URL (after scheduling)
+                      <button
+                        onClick={() => handleSendSessionEmail(candidate)}
+                        disabled={sendingEmail === candidate._id}
+                        className={`px-4 py-2 rounded flex items-center gap-2 ${
+                          sendingEmail === candidate._id
+                            ? 'bg-gray-400 text-white cursor-not-allowed'
+                            : 'bg-blue-600 text-white hover:bg-blue-700'
+                        }`}
+                      >
+                        {sendingEmail === candidate._id ? (
+                          <>
+                            <span className="animate-spin">⏳</span> 
+                            Sending Email...
+                          </>
+                        ) : (
+                          <>
+                            📧 Send Session URL
+                          </>
+                        )}
+                      </button>
+                    )}
+                    
+                    {/* Show scheduled interview details */}
+                    {isInterviewScheduled(candidate._id) && (
+                      <div className="text-xs text-green-600 mt-1">
+                        ✅ Scheduled: {getScheduledInterview(candidate._id)?.scheduledDate} at {getScheduledInterview(candidate._id)?.scheduledTime}
+                      </div>
+                    )}
                     {callingCandidate === candidate._id && callTimeout > 30 && (
                       <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center">
                         ⚠️ Call taking longer than expected. AI service may be busy.
@@ -731,6 +846,109 @@ const ShortlistedCandidates = () => {
           </div>
         )}
       </div>
+
+      {/* Interview Scheduling Modal */}
+      {showScheduleModal && selectedCandidate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg w-96 max-w-full">
+            <h3 className="text-lg font-semibold mb-4">
+              Schedule Interview - {selectedCandidate.candidateName}
+            </h3>
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const formData = new FormData(e.target);
+              handleScheduleSubmit({
+                date: formData.get('date'),
+                time: formData.get('time'),
+                duration: formData.get('duration'),
+                type: formData.get('type'),
+                notes: formData.get('notes')
+              });
+            }}>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Interview Date</label>
+                  <input
+                    type="date"
+                    name="date"
+                    required
+                    min={new Date().toISOString().split('T')[0]}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Interview Time</label>
+                  <input
+                    type="time"
+                    name="time"
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Duration (minutes)</label>
+                  <select
+                    name="duration"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="30">30 minutes</option>
+                    <option value="45">45 minutes</option>
+                    <option value="60" selected>60 minutes</option>
+                    <option value="90">90 minutes</option>
+                    <option value="120">120 minutes</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Interview Type</label>
+                  <select
+                    name="type"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="Technical Interview">Technical Interview</option>
+                    <option value="HR Interview">HR Interview</option>
+                    <option value="System Design">System Design</option>
+                    <option value="Coding Assessment">Coding Assessment</option>
+                    <option value="Final Round">Final Round</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Notes (Optional)</label>
+                  <textarea
+                    name="notes"
+                    rows="3"
+                    placeholder="Any special instructions or topics to cover..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-6">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowScheduleModal(false);
+                    setSelectedCandidate(null);
+                  }}
+                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={schedulingInterview === selectedCandidate._id}
+                  className={`px-4 py-2 rounded-md ${
+                    schedulingInterview === selectedCandidate._id
+                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                      : 'bg-green-600 text-white hover:bg-green-700'
+                  }`}
+                >
+                  {schedulingInterview === selectedCandidate._id ? 'Scheduling...' : 'Schedule Interview'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
