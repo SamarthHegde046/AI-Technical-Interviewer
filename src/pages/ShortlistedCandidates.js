@@ -7,6 +7,7 @@ const ShortlistedCandidates = () => {
   const [message, setMessage] = useState({ type: '', text: '' });
   const [callingCandidate, setCallingCandidate] = useState(null);
   const [callTimeout, setCallTimeout] = useState(0);
+  const [sendingEmail, setSendingEmail] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -301,9 +302,77 @@ const ShortlistedCandidates = () => {
     }
   };
 
+  const handleSendSessionEmail = async (candidate) => {
+    try {
+      setSendingEmail(candidate._id);
+      setMessage({ 
+        type: 'info', 
+        text: `Sending session URL to ${candidate.candidateName}...` 
+      });
+
+      const backendUrl = process.env.NODE_ENV === 'production' 
+        ? 'https://ai-technical-interviewer.onrender.com/api'
+        : 'http://localhost:5000/api';
+
+      const response = await fetch(`${backendUrl}/email/send-candidate-session`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`,
+        },
+        body: JSON.stringify({
+          candidateId: candidate._id,
+          recruiterEmail: JSON.parse(localStorage.getItem('user') || '{}').email || 'recruiter@company.com',
+          message: `Interview session URL for ${candidate.role} position at ${candidate.companyName}`
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || 'Failed to send email');
+      }
+
+      // Update candidate status to indicate email was sent
+      await updateInterviewStatus(candidate._id, 'email_sent', {
+        notes: `Session URL sent via email on ${new Date().toLocaleString()}`,
+        sessionUrl: result.data.sessionUrl,
+        lastEmailDate: new Date().toISOString()
+      });
+
+      setMessage({ 
+        type: 'success', 
+        text: `📧 Session URL sent successfully to ${candidate.candidateName} (${candidate.candidateEmail})! They can now access their interview session.` 
+      });
+
+    } catch (err) {
+      console.error('Error sending session email:', err);
+      
+      let errorMessage = `Failed to send session URL to ${candidate.candidateName}`;
+      
+      if (err.message.includes('not found')) {
+        errorMessage += ': Candidate not found in system.';
+      } else if (err.message.includes('email not found')) {
+        errorMessage += ': No email address available for candidate.';
+      } else if (err.message.includes('Network')) {
+        errorMessage += ': Network connection failed.';
+      } else {
+        errorMessage += `: ${err.message}`;
+      }
+      
+      setMessage({ 
+        type: 'error', 
+        text: errorMessage
+      });
+    } finally {
+      setSendingEmail(null);
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'shortlisted': return 'bg-blue-100 text-blue-800';
+      case 'email_sent': return 'bg-cyan-100 text-cyan-800';
       case 'calling': return 'bg-yellow-100 text-yellow-800';
       case 'scheduled': return 'bg-green-100 text-green-800';
       case 'call_completed': return 'bg-indigo-100 text-indigo-800';
@@ -499,6 +568,26 @@ const ShortlistedCandidates = () => {
                         </>
                       )}
                     </button>
+                    <button
+                      onClick={() => handleSendSessionEmail(candidate)}
+                      disabled={sendingEmail === candidate._id}
+                      className={`px-4 py-2 rounded flex items-center gap-2 ${
+                        sendingEmail === candidate._id
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {sendingEmail === candidate._id ? (
+                        <>
+                          <span className="animate-spin">⏳</span> 
+                          Sending Email...
+                        </>
+                      ) : (
+                        <>
+                          📧 Send Session URL
+                        </>
+                      )}
+                    </button>
                     {callingCandidate === candidate._id && callTimeout > 30 && (
                       <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center">
                         ⚠️ Call taking longer than expected. AI service may be busy.
@@ -507,10 +596,38 @@ const ShortlistedCandidates = () => {
                   </>
                 )}
                 
+                {candidate.interviewStatus === 'email_sent' && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-cyan-600">📧 Session URL sent</span>
+                    <button
+                      onClick={() => handleSendSessionEmail(candidate)}
+                      disabled={sendingEmail === candidate._id}
+                      className={`px-3 py-1 text-sm rounded ${
+                        sendingEmail === candidate._id
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {sendingEmail === candidate._id ? 'Sending...' : 'Resend Email'}
+                    </button>
+                  </div>
+                )}
+                
                 {candidate.interviewStatus === 'calling' && (
                   <div className="flex items-center gap-2">
                     <span className="animate-pulse text-yellow-600">📞 Call in progress...</span>
                     <span className="text-xs text-gray-500">Waiting for candidate response</span>
+                    <button
+                      onClick={() => handleSendSessionEmail(candidate)}
+                      disabled={sendingEmail === candidate._id}
+                      className={`px-3 py-1 text-sm rounded ${
+                        sendingEmail === candidate._id
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {sendingEmail === candidate._id ? 'Sending...' : '📧 Send URL'}
+                    </button>
                   </div>
                 )}
                 
@@ -518,6 +635,17 @@ const ShortlistedCandidates = () => {
                   <div className="flex items-center gap-2">
                     <span className="text-indigo-600">✅ Call completed</span>
                     <span className="text-xs text-gray-500">Awaiting interview scheduling</span>
+                    <button
+                      onClick={() => handleSendSessionEmail(candidate)}
+                      disabled={sendingEmail === candidate._id}
+                      className={`px-3 py-1 text-sm rounded ${
+                        sendingEmail === candidate._id
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {sendingEmail === candidate._id ? 'Sending...' : '📧 Send URL'}
+                    </button>
                   </div>
                 )}
                 
