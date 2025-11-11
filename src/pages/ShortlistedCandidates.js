@@ -9,11 +9,8 @@ const ShortlistedCandidates = () => {
   const [callTimeout, setCallTimeout] = useState(0);
   const [sendingEmail, setSendingEmail] = useState(null);
   
-  // Interview scheduling states
-  const [schedulingInterview, setSchedulingInterview] = useState(null);
-  const [scheduledInterviews, setScheduledInterviews] = useState(new Map()); // candidateId -> interview details
-  const [showScheduleModal, setShowScheduleModal] = useState(false);
-  const [selectedCandidate, setSelectedCandidate] = useState(null);
+  // Interview state - fetched from DB after AI scheduling
+  const [fetchingSchedule, setFetchingSchedule] = useState(null);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -307,82 +304,53 @@ const ShortlistedCandidates = () => {
     }
   };
 
-  // Interview Scheduling Functions
-  const handleScheduleInterview = (candidate) => {
-    setSelectedCandidate(candidate);
-    setShowScheduleModal(true);
-  };
-
-  const handleScheduleSubmit = async (scheduleData) => {
+  // Fetch scheduled interview from database
+  const fetchScheduledInterview = async (candidateId) => {
     try {
-      setSchedulingInterview(selectedCandidate._id);
+      setFetchingSchedule(candidateId);
       
-      // Create interview schedule object
-      const interviewDetails = {
-        candidateId: selectedCandidate._id,
-        candidateName: selectedCandidate.candidateName,
-        candidateEmail: selectedCandidate.candidateEmail,
-        scheduledDate: scheduleData.date,
-        scheduledTime: scheduleData.time,
-        duration: scheduleData.duration || 60, // minutes
-        interviewType: scheduleData.type || 'Technical Interview',
-        notes: scheduleData.notes || '',
-        status: 'scheduled',
-        createdAt: new Date().toISOString()
-      };
-
-      // Store in local state (you can later save to database)
-      setScheduledInterviews(prev => {
-        const newMap = new Map(prev);
-        newMap.set(selectedCandidate._id, interviewDetails);
-        return newMap;
-      });
-
-      setMessage({
-        type: 'success',
-        text: `Interview scheduled successfully for ${selectedCandidate.candidateName} on ${scheduleData.date} at ${scheduleData.time}`
-      });
-
-      setShowScheduleModal(false);
-      setSelectedCandidate(null);
-
+      const backendUrl = 'http://localhost:3333/api';
+      const response = await fetch(`${backendUrl}/scheduled-sessions/candidate/${candidateId}`);
+      
+      if (response.ok) {
+        const scheduledSession = await response.json();
+        return scheduledSession;
+      } else {
+        console.log('No scheduled interview found for candidate');
+        return null;
+      }
     } catch (error) {
-      console.error('Error scheduling interview:', error);
-      setMessage({
-        type: 'error',
-        text: 'Failed to schedule interview. Please try again.'
-      });
+      console.error('Error fetching scheduled interview:', error);
+      return null;
     } finally {
-      setSchedulingInterview(null);
+      setFetchingSchedule(null);
     }
   };
 
-  const isInterviewScheduled = (candidateId) => {
-    return scheduledInterviews.has(candidateId);
-  };
-
-  const getScheduledInterview = (candidateId) => {
-    return scheduledInterviews.get(candidateId);
+  const checkIfInterviewScheduled = async (candidateId) => {
+    const scheduledInterview = await fetchScheduledInterview(candidateId);
+    return scheduledInterview && scheduledInterview.status === 'scheduled';
   };
 
   const handleSendSessionEmail = async (candidate) => {
-    // Check if interview is scheduled first
-    if (!isInterviewScheduled(candidate._id)) {
-      setMessage({
-        type: 'error',
-        text: 'Please schedule the interview before sending the session URL.'
-      });
-      return;
-    }
-
-    const scheduledInterview = getScheduledInterview(candidate._id);
-
     try {
       setSendingEmail(candidate._id);
       setMessage({ 
         type: 'info', 
-        text: `Sending session URL to ${candidate.candidateName} for scheduled interview...` 
+        text: `Checking for scheduled interview and sending session URL to ${candidate.candidateName}...` 
       });
+
+      // First check if there's a scheduled interview from AI calling system
+      const scheduledInterview = await fetchScheduledInterview(candidate._id);
+      
+      if (!scheduledInterview) {
+        setMessage({
+          type: 'error',
+          text: 'No scheduled interview found. Please ensure the AI calling system has scheduled an interview first.'
+        });
+        setSendingEmail(null);
+        return;
+      }
 
       // FORCE LOCAL BACKEND - HARDCODED TO PREVENT CACHING ISSUES
       const backendUrl = 'http://localhost:3333/api';
@@ -689,52 +657,32 @@ const ShortlistedCandidates = () => {
                         </>
                       )}
                     </button>
-                    {/* Interview Workflow Buttons */}
-                    {!isInterviewScheduled(candidate._id) ? (
-                      // Step 1: Schedule Interview
-                      <button
-                        onClick={() => handleScheduleInterview(candidate)}
-                        disabled={schedulingInterview === candidate._id}
-                        className={`px-4 py-2 rounded flex items-center gap-2 ${
-                          schedulingInterview === candidate._id
-                            ? 'bg-gray-400 text-white cursor-not-allowed'
-                            : 'bg-green-600 text-white hover:bg-green-700'
-                        }`}
-                      >
-                        {schedulingInterview === candidate._id ? (
-                          <>
-                            <span className="animate-spin">⏳</span> 
-                            Scheduling...
-                          </>
-                        ) : (
-                          <>
-                            📅 Schedule Interview
-                          </>
-                        )}
-                      </button>
-                    ) : (
-                      // Step 2: Send Session URL (after scheduling)
-                      <button
-                        onClick={() => handleSendSessionEmail(candidate)}
-                        disabled={sendingEmail === candidate._id}
-                        className={`px-4 py-2 rounded flex items-center gap-2 ${
-                          sendingEmail === candidate._id
-                            ? 'bg-gray-400 text-white cursor-not-allowed'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
-                      >
-                        {sendingEmail === candidate._id ? (
-                          <>
-                            <span className="animate-spin">⏳</span> 
-                            Sending Email...
-                          </>
-                        ) : (
-                          <>
-                            📧 Send Session URL
-                          </>
-                        )}
-                      </button>
-                    )}
+                    {/* Send Session URL Button - Only after AI scheduling */}
+                    <button
+                      onClick={() => handleSendSessionEmail(candidate)}
+                      disabled={sendingEmail === candidate._id || fetchingSchedule === candidate._id}
+                      className={`px-4 py-2 rounded flex items-center gap-2 ${
+                        (sendingEmail === candidate._id || fetchingSchedule === candidate._id)
+                          ? 'bg-gray-400 text-white cursor-not-allowed'
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {sendingEmail === candidate._id ? (
+                        <>
+                          <span className="animate-spin">⏳</span> 
+                          Sending Email...
+                        </>
+                      ) : fetchingSchedule === candidate._id ? (
+                        <>
+                          <span className="animate-spin">⏳</span> 
+                          Checking Schedule...
+                        </>
+                      ) : (
+                        <>
+                          📧 Send Session URL
+                        </>
+                      )}
+                    </button>
                     
                     {/* Show scheduled interview details */}
                     {isInterviewScheduled(candidate._id) && (
@@ -847,108 +795,7 @@ const ShortlistedCandidates = () => {
         )}
       </div>
 
-      {/* Interview Scheduling Modal */}
-      {showScheduleModal && selectedCandidate && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg w-96 max-w-full">
-            <h3 className="text-lg font-semibold mb-4">
-              Schedule Interview - {selectedCandidate.candidateName}
-            </h3>
-            <form onSubmit={(e) => {
-              e.preventDefault();
-              const formData = new FormData(e.target);
-              handleScheduleSubmit({
-                date: formData.get('date'),
-                time: formData.get('time'),
-                duration: formData.get('duration'),
-                type: formData.get('type'),
-                notes: formData.get('notes')
-              });
-            }}>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-1">Interview Date</label>
-                  <input
-                    type="date"
-                    name="date"
-                    required
-                    min={new Date().toISOString().split('T')[0]}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Interview Time</label>
-                  <input
-                    type="time"
-                    name="time"
-                    required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Duration (minutes)</label>
-                  <select
-                    name="duration"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="30">30 minutes</option>
-                    <option value="45">45 minutes</option>
-                    <option value="60" selected>60 minutes</option>
-                    <option value="90">90 minutes</option>
-                    <option value="120">120 minutes</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Interview Type</label>
-                  <select
-                    name="type"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="Technical Interview">Technical Interview</option>
-                    <option value="HR Interview">HR Interview</option>
-                    <option value="System Design">System Design</option>
-                    <option value="Coding Assessment">Coding Assessment</option>
-                    <option value="Final Round">Final Round</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">Notes (Optional)</label>
-                  <textarea
-                    name="notes"
-                    rows="3"
-                    placeholder="Any special instructions or topics to cover..."
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-              
-              <div className="flex justify-end space-x-3 mt-6">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowScheduleModal(false);
-                    setSelectedCandidate(null);
-                  }}
-                  className="px-4 py-2 text-gray-600 border border-gray-300 rounded-md hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={schedulingInterview === selectedCandidate._id}
-                  className={`px-4 py-2 rounded-md ${
-                    schedulingInterview === selectedCandidate._id
-                      ? 'bg-gray-400 text-white cursor-not-allowed'
-                      : 'bg-green-600 text-white hover:bg-green-700'
-                  }`}
-                >
-                  {schedulingInterview === selectedCandidate._id ? 'Scheduling...' : 'Schedule Interview'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 };
