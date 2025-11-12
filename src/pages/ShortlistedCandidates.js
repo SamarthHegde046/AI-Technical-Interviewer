@@ -654,40 +654,42 @@ const ShortlistedCandidates = () => {
                         </>
                       )}
                     </button>
-                    {/* Send Session URL Button - Only after AI scheduling */}
-                    <button
-                      onClick={() => handleSendSessionEmail(candidate)}
-                      disabled={sendingEmail === candidate._id || fetchingSchedule === candidate._id}
-                      className={`px-4 py-2 rounded flex items-center gap-2 ${
-                        (sendingEmail === candidate._id || fetchingSchedule === candidate._id)
-                          ? 'bg-gray-400 text-white cursor-not-allowed'
-                          : 'bg-blue-600 text-white hover:bg-blue-700'
-                      }`}
-                    >
-                      {sendingEmail === candidate._id ? (
-                        <>
-                          <span className="animate-spin">⏳</span> 
-                          Sending Email...
-                        </>
-                      ) : fetchingSchedule === candidate._id ? (
-                        <>
-                          <span className="animate-spin">⏳</span> 
-                          Checking Schedule...
-                        </>
-                      ) : (
-                        <>
-                          📧 Send Session URL
-                        </>
-                      )}
-                    </button>
-                    
-
-                    {callingCandidate === candidate._id && callTimeout > 30 && (
-                      <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center">
-                        ⚠️ Call taking longer than expected. AI service may be busy.
-                      </div>
-                    )}
                   </>
+                )}
+
+                {/* Send Session URL Button - Show for scheduled candidates */}
+                {(candidate.interviewStatus === 'scheduled' || candidate.interviewStatus === 'pending' || candidate.interviewStatus === 'shortlisted') && (
+                  <button
+                    onClick={() => handleSendSessionEmail(candidate)}
+                    disabled={sendingEmail === candidate._id || fetchingSchedule === candidate._id}
+                    className={`px-4 py-2 rounded flex items-center gap-2 ${
+                      (sendingEmail === candidate._id || fetchingSchedule === candidate._id)
+                        ? 'bg-gray-400 text-white cursor-not-allowed'
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`}
+                  >
+                    {sendingEmail === candidate._id ? (
+                      <>
+                        <span className="animate-spin">⏳</span> 
+                        Sending Email...
+                      </>
+                    ) : fetchingSchedule === candidate._id ? (
+                      <>
+                        <span className="animate-spin">⏳</span> 
+                        Checking Schedule...
+                      </>
+                    ) : (
+                      <>
+                        📧 Send Session URL
+                      </>
+                    )}
+                  </button>
+                )}
+
+                {callingCandidate === candidate._id && callTimeout > 30 && (
+                  <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-1 flex items-center">
+                    ⚠️ Call taking longer than expected. AI service may be busy.
+                  </div>
                 )}
                 
                 {candidate.interviewStatus === 'email_sent' && (
