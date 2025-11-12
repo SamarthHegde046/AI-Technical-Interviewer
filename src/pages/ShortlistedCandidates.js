@@ -1,6 +1,12 @@
 import { useEffect, useState } from 'react';
 import { shortlistedAPI } from '../utils/api';
 
+// Centralized API configuration
+const API_CONFIG = {
+  BACKEND_URL: 'http://localhost:3333/api', // Using local backend since Render is broken
+  AI_CALLER_URL: 'https://ai-interview-caller.vercel.app'
+};
+
 const ShortlistedCandidates = () => {
   const [shortlistedCandidates, setShortlistedCandidates] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -142,8 +148,8 @@ const ShortlistedCandidates = () => {
         });
       }
       
-      // Temporary fix: Force localhost since production Render deployment has issues
-      const backendUrl = 'http://localhost:3333/api';
+      // Use deployed backend for AI caller proxy
+      const backendUrl = API_CONFIG.BACKEND_URL;
       
       let aiCallResponse;
       
@@ -176,7 +182,7 @@ const ShortlistedCandidates = () => {
         }
         
         // Try direct call as fallback
-        const aiCallerUrl = process.env.REACT_APP_AI_CALLER_URL || 'https://ai-interview-caller.vercel.app';
+        const aiCallerUrl = process.env.REACT_APP_AI_CALLER_URL || API_CONFIG.AI_CALLER_URL;
         
         const directController = new AbortController();
         const directTimeoutId = setTimeout(() => directController.abort(), 65000);
@@ -309,7 +315,7 @@ const ShortlistedCandidates = () => {
     try {
       setFetchingSchedule(candidateId);
       
-      const backendUrl = 'http://localhost:3333/api';
+      const backendUrl = API_CONFIG.BACKEND_URL;
       const response = await fetch(`${backendUrl}/scheduled-sessions/candidate/${candidateId}`);
       
       if (response.ok) {
@@ -349,14 +355,8 @@ const ShortlistedCandidates = () => {
         return;
       }
 
-      // FORCE LOCAL BACKEND - HARDCODED TO PREVENT CACHING ISSUES
-      const backendUrl = 'http://localhost:3333/api';
-      
-      // CRITICAL: Verify we're not calling production URL
-      if (backendUrl.includes('onrender.com')) {
-        alert('ERROR: Still using production URL! Check code!');
-        throw new Error('Production URL detected - should use localhost');
-      }
+      // USE DEPLOYED BACKEND URL
+      const backendUrl = API_CONFIG.BACKEND_URL;
       
       // Debug logging to verify URL
       console.log('🔍 DEBUG: Using backend URL:', backendUrl);
