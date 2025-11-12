@@ -3,7 +3,7 @@ import { shortlistedAPI } from '../utils/api';
 
 // Centralized API configuration - Use environment variables
 const API_CONFIG = {
-  BACKEND_URL: process.env.REACT_APP_API_URL || 'https://ai-technical-interviewer.onrender.com/api',
+  BACKEND_URL: process.env.REACT_APP_API_URL || 'https://ai-technical-interviewer.onrender.com',
   AI_CALLER_URL: process.env.REACT_APP_AI_CALLER_URL || 'https://ai-interview-caller.vercel.app'
 };
 
