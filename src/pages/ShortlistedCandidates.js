@@ -316,17 +316,28 @@ const ShortlistedCandidates = () => {
       setFetchingSchedule(candidateId);
       
       const backendUrl = API_CONFIG.BACKEND_URL;
+      console.log('🔍 Fetching scheduled interview for candidateId:', candidateId);
+      console.log('🔍 API URL:', `${backendUrl}/scheduled-sessions/candidate/${candidateId}`);
+      
       const response = await fetch(`${backendUrl}/scheduled-sessions/candidate/${candidateId}`);
+      
+      console.log('🔍 Response status:', response.status);
+      console.log('🔍 Response headers:', Object.fromEntries(response.headers.entries()));
       
       if (response.ok) {
         const scheduledSession = await response.json();
-        return scheduledSession;
+        console.log('✅ Found scheduled session:', scheduledSession);
+        // Ensure it has the expected structure
+        return scheduledSession.success ? scheduledSession : { success: true, session: scheduledSession };
       } else {
-        console.log('No scheduled interview found for candidate');
+        const errorText = await response.text();
+        console.log('❌ No scheduled interview found for candidate');
+        console.log('❌ Response status:', response.status);
+        console.log('❌ Response body:', errorText);
         return null;
       }
     } catch (error) {
-      console.error('Error fetching scheduled interview:', error);
+      console.error('💥 Error fetching scheduled interview:', error);
       return null;
     } finally {
       setFetchingSchedule(null);
@@ -343,10 +354,44 @@ const ShortlistedCandidates = () => {
         text: `Checking for scheduled interview and sending session URL to ${candidate.candidateName}...` 
       });
 
-      // First check if there's a scheduled interview from AI calling system
-      const scheduledInterview = await fetchScheduledInterview(candidate._id);
+      // First check if the candidate has scheduled interview data
+      let scheduledInterview = null;
       
-      if (!scheduledInterview) {
+      // Check if interview details are in the candidate object itself
+      if (candidate.interviewStatus === 'scheduled' && candidate.aiInterviewSessionId) {
+        console.log('✅ Found scheduled interview data in candidate object:', {
+          sessionId: candidate.aiInterviewSessionId,
+          scheduledDate: candidate.scheduledInterviewDate,
+          notes: candidate.notes,
+          callSid: candidate.lastCallSid,
+          interviewDetails: candidate.call_tracking?.interview_details
+        });
+        
+        scheduledInterview = {
+          success: true,
+          session: {
+            sessionId: candidate.aiInterviewSessionId,
+            candidateId: candidate._id,
+            candidateName: candidate.candidateName,
+            candidateEmail: candidate.candidateEmail,
+            scheduledDate: candidate.scheduledInterviewDate,
+            scheduledSlot: candidate.call_tracking?.interview_details?.scheduled_slot,
+            notes: candidate.notes || 'Interview scheduled via AI calling system',
+            callSid: candidate.lastCallSid
+          }
+        };
+      } else {
+        console.log('❌ Candidate missing required fields for scheduled interview:', {
+          interviewStatus: candidate.interviewStatus,
+          aiInterviewSessionId: candidate.aiInterviewSessionId,
+          candidate: candidate
+        });
+        
+        // Fallback: try to fetch from scheduled sessions API
+        scheduledInterview = await fetchScheduledInterview(candidate._id);
+      }
+      
+      if (!scheduledInterview || !scheduledInterview.session) {
         setMessage({
           type: 'error',
           text: 'No scheduled interview found. Please ensure the AI calling system has scheduled an interview first.'
@@ -366,16 +411,20 @@ const ShortlistedCandidates = () => {
 
       console.log('🚀 DEBUG: Making POST request...');
       
+      const session = scheduledInterview.session;
       const requestPayload = {
         candidateId: candidate._id,
         recruiterEmail: JSON.parse(localStorage.getItem('user') || '{}').email || 'recruiter@company.com',
-        message: `Interview session scheduled for ${scheduledInterview.scheduledDate} at ${scheduledInterview.scheduledTime}`,
+        message: `Interview session scheduled for ${session.scheduledSlot || 'upcoming slot'}. Session ID: ${session.sessionId}`,
         scheduledInterview: {
-          date: scheduledInterview.scheduledDate,
-          time: scheduledInterview.scheduledTime,
-          duration: scheduledInterview.duration,
-          type: scheduledInterview.interviewType,
-          notes: scheduledInterview.notes
+          sessionId: session.sessionId,
+          candidateId: session.candidateId,
+          candidateName: session.candidateName,
+          candidateEmail: session.candidateEmail,
+          scheduledDate: session.scheduledDate,
+          scheduledSlot: session.scheduledSlot,
+          notes: session.notes,
+          callSid: session.callSid
         }
       };
       
