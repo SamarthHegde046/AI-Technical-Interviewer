@@ -1,11 +1,18 @@
 import { useEffect, useState } from 'react';
 import { shortlistedAPI } from '../utils/api';
 
-// Centralized API configuration - Production URLs only
+// Centralized API configuration - Use environment variables
 const API_CONFIG = {
-  BACKEND_URL: 'https://ai-technical-interviewer.onrender.com/api',
-  AI_CALLER_URL: 'https://ai-interview-caller.vercel.app'
+  BACKEND_URL: process.env.REACT_APP_API_URL || 'https://ai-technical-interviewer.onrender.com/api',
+  AI_CALLER_URL: process.env.REACT_APP_AI_CALLER_URL || 'https://ai-interview-caller.vercel.app'
 };
+
+console.log('🔧 API Configuration:', {
+  BACKEND_URL: API_CONFIG.BACKEND_URL,
+  AI_CALLER_URL: API_CONFIG.AI_CALLER_URL,
+  ENV_BACKEND: process.env.REACT_APP_API_URL,
+  ENV_AI_CALLER: process.env.REACT_APP_AI_CALLER_URL
+});
 
 const ShortlistedCandidates = () => {
   const [shortlistedCandidates, setShortlistedCandidates] = useState([]);

@@ -1,8 +1,9 @@
 // utils/api.js
 import axios from 'axios';
 
-// Temporary fix: Use localhost since production has issues
-const API_URL = 'https://ai-technical-interviewer.onrender.com/api';
+// Use environment variable with fallback
+const API_URL = process.env.REACT_APP_API_URL || 'https://ai-technical-interviewer.onrender.com/api';
+console.log('🔧 API URL from environment:', API_URL);
 
 const api = axios.create({
   baseURL: API_URL,
