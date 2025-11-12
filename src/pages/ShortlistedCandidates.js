@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { shortlistedAPI } from '../utils/api';
 
-// Centralized API configuration
+// Centralized API configuration - Production URLs only
 const API_CONFIG = {
-  BACKEND_URL: 'http://localhost:3333/api', // Using local backend since Render is broken
+  BACKEND_URL: 'https://ai-technical-interviewer.onrender.com/api',
   AI_CALLER_URL: 'https://ai-interview-caller.vercel.app'
 };
 
